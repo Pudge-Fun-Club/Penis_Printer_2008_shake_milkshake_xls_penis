@@ -158,11 +158,7 @@ function AdminApp() {
   }, [notificationPermission, status, t, toast]);
 
   const openInAiDesigner = (itemId: string) => {
-    fetch(api.galleryOriginalUrl(itemId), { credentials: "same-origin" })
-      .then((r) => {
-        if (!r.ok) throw new Error(r.statusText);
-        return r.blob();
-      })
+    api.galleryOriginal(itemId)
       .then((blob) => {
         const ext = blob.type.includes("png") ? "png" : "jpg";
         const file = new File([blob], `gallery-${itemId}.${ext}`, { type: blob.type });

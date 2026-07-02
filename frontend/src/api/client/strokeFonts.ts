@@ -1,4 +1,4 @@
-import { req } from "./req";
+import { req, reqBlob } from "./req";
 import type {
   StrokeFontDocument,
   StrokeFontListResponse,
@@ -15,19 +15,7 @@ const SAFE_NAME = /[^A-Za-z0-9_.-]+/g;
 
 // Fetch the .gcsfont backup and trigger a browser download.
 async function downloadStrokeFont(id: string, label: string): Promise<void> {
-  const res = await fetch(`/api/stroke-fonts/${encodeURIComponent(id)}/export`, {
-    credentials: "same-origin",
-  });
-  if (!res.ok) {
-    let detail = res.statusText;
-    try {
-      detail = (await res.json()).detail ?? detail;
-    } catch {
-      /* ignore */
-    }
-    throw new Error(detail);
-  }
-  const blob = await res.blob();
+  const blob = await reqBlob(`/api/stroke-fonts/${encodeURIComponent(id)}/export`);
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

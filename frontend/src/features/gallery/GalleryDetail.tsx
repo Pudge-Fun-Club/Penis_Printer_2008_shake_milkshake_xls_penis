@@ -71,8 +71,7 @@ export default function GalleryDetail({
     if (busy) return;
     setBusy(true);
     setErr(null);
-    const url = api.galleryOriginalUrl(item.id);
-    Promise.all([api.getCalibration(), fetch(url).then((r) => r.arrayBuffer())])
+    Promise.all([api.getCalibration(), api.galleryOriginalBuffer(item.id)])
       .then(([cal, buf]) =>
         setStlEdit({ buf, cal, params: (item.stl_params as unknown as StlParams) ?? undefined })
       )
@@ -96,8 +95,7 @@ export default function GalleryDetail({
   useEffect(() => {
     if (item.kind !== "stl" || view !== "original" || stlSpin) return;
     let alive = true;
-    fetch(api.galleryOriginalUrl(item.id))
-      .then((r) => r.arrayBuffer())
+    api.galleryOriginalBuffer(item.id)
       .then((buf) => {
         if (!alive) return;
         const mesh = parseStl(buf);

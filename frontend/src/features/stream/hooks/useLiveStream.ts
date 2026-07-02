@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { req } from "../../../api/client/req";
 import { useI18n } from "../../../i18n";
 import { setLiveRegistryState, setLiveRegistryStop } from "../lib/liveRegistry";
 import type { DesignerSnapshot, StreamMessage, StreamSessionStart, StreamState } from "../lib/protocol";
@@ -105,14 +106,11 @@ async function startOrSwitch(sourceId: string, getSnapshot: () => DesignerSnapsh
   setController({ state: "connecting", sourceId, error: null });
   const viewer = openViewerTab();
   try {
-    const res = await fetch("/api/stream/sessions", {
+    session = await req<StreamSessionStart>("/api/stream/sessions", {
       method: "POST",
-      credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sourceId }),
     });
-    if (!res.ok) throw new Error(await res.text());
-    session = (await res.json()) as StreamSessionStart;
     if (viewer) viewer.location.href = session.viewerUrl;
     const socket = new WebSocket(wsUrl(`/api/stream/ws/publish/${session.sessionId}`));
     ws = socket;

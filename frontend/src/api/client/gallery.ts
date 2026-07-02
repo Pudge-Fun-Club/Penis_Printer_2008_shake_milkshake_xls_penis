@@ -1,4 +1,4 @@
-import { req } from "./req";
+import { req, reqArrayBuffer, reqBlob } from "./req";
 import type { GalleryItem, GallerySvg, GalleryPreview, GalleryUploader, StlLayerPayload } from "../types/gallery";
 import type { GcodePreview3D } from "../types/jobs";
 
@@ -25,6 +25,8 @@ export const galleryClient = {
   galleryPreview: (id: string, page: number) =>
     req<GalleryPreview>(`/api/gallery/${id}/preview/${page}`),
   galleryOriginalUrl: (id: string) => `/api/gallery/${id}/original`,
+  galleryOriginal: (id: string) => reqBlob(`/api/gallery/${id}/original`),
+  galleryOriginalBuffer: (id: string) => reqArrayBuffer(`/api/gallery/${id}/original`),
   galleryCreateStl: (
     stl: BlobPart, filename: string, params: object, layers: StlLayerPayload[], title = "",
   ) => {
