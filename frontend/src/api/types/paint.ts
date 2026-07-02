@@ -52,6 +52,8 @@ export interface Page {
   profileFingerprint?: string | null;
   profileStatus?: PageProfileStatus;
   coloring?: PageColoring | null;
+  // Manual folder the page was dragged into (null = grouped by profile).
+  groupId?: string | null;
   // Plot as one continuous stroke per connected component (eulerised) — far
   // fewer pen lifts. Auto-on for OSM map pages.
   continuous?: boolean;
@@ -75,11 +77,18 @@ export interface PageMeta {
   profileName?: string | null;
   profileFingerprint?: string | null;
   profileStatus?: PageProfileStatus;
+  groupId?: string | null;
+}
+
+export interface PageGroup {
+  id: string;
+  name: string;
 }
 
 export interface PageIndex {
   order: PageMeta[];
   activeId: string | null;
+  groups?: PageGroup[];
   activeProfile?: ProfileRef & {
     plot_width: number;
     plot_height: number;

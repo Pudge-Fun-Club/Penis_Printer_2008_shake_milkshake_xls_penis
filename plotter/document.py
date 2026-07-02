@@ -69,7 +69,10 @@ class DocumentStore:
     # -- index helpers -----------------------------------------------------
 
     def _index(self) -> dict:
-        return self._store.get(self.INDEX_KEY) or {"order": [], "activeId": None}
+        index = self._store.get(self.INDEX_KEY) or {"order": [], "activeId": None}
+        # Manual folders were added later; tolerate indexes stored before them.
+        index.setdefault("groups", [])
+        return index
 
     def _save_index(self, index: dict) -> None:
         self._store.set(self.INDEX_KEY, index)
@@ -91,6 +94,8 @@ class DocumentStore:
             "profileId": page.get("profileId"),
             "profileName": page.get("profileName"),
             "profileFingerprint": page.get("profileFingerprint"),
+            # Manual folder the page was dragged into (None = grouped by profile).
+            "groupId": page.get("groupId"),
             "mcpCreated": bool((page.get("mcp") or {}).get("created")),
         }
 
@@ -254,6 +259,60 @@ class DocumentStore:
             self._save_index(index)
             _emit("reorder")
             return index
+
+    # -- manual folders ----------------------------------------------------
+
+    def create_group(self, name: str) -> dict:
+        with self._lock:
+            index = self._index()
+            group = {"id": "g-" + uuid.uuid4().hex[:6], "name": name or "Ordner"}
+            index["groups"].append(group)
+            self._save_index(index)
+            _emit("group")
+            return index
+
+    def rename_group(self, group_id: str, name: str) -> dict:
+        with self._lock:
+            index = self._index()
+            for g in index["groups"]:
+                if g["id"] == group_id:
+                    g["name"] = name
+                    break
+            self._save_index(index)
+            _emit("group")
+            return index
+
+    def delete_group(self, group_id: str) -> dict:
+        """Drop the folder and un-group every page that lived in it."""
+        with self._lock:
+            index = self._index()
+            index["groups"] = [g for g in index["groups"] if g["id"] != group_id]
+            for m in index["order"]:
+                if m.get("groupId") != group_id:
+                    continue
+                m["groupId"] = None
+                page = self._store.get(self._page_key(m["id"]))
+                if page is not None:
+                    page.pop("groupId", None)
+                    self._store.set(self._page_key(m["id"]), page)
+            self._save_index(index)
+            _emit("group")
+            return index
+
+    def set_page_group(self, page_id: str, group_id: str | None) -> dict:
+        """Move a page into a folder (or out of any folder when ``None``)."""
+        with self._lock:
+            page = self._store.get(self._page_key(page_id))
+            if page is None:
+                raise KeyError(page_id)
+            if group_id:
+                page["groupId"] = group_id
+            else:
+                page.pop("groupId", None)
+            self._store.set(self._page_key(page_id), page)
+            self._refresh_meta(page)
+            _emit("group", page_id=page_id)
+            return self._index()
 
     # -- internal ----------------------------------------------------------
 

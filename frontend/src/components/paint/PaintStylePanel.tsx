@@ -1,5 +1,6 @@
-import { type FillMode, type StrokeMode, type VectorStyle } from "../../paint/styling";
+import { type StrokeMode, type VectorStyle } from "../../paint/styling";
 import { useI18n } from "../../i18n";
+import { FillOptions } from "./FillOptions";
 
 export interface SelectedObjectSize {
   width: number;
@@ -55,6 +56,29 @@ export function PaintStylePanel({
             <em>mm</em>
           </div>
         </label>
+        <button
+          type="button"
+          className={`size-link ${sizeLinked ? "active" : ""}`}
+          aria-pressed={sizeLinked}
+          aria-label={t("paint.keepAspect")}
+          title={t("paint.keepAspect")}
+          onClick={onSizeLinkedToggle}
+        >
+          <svg
+            className="size-link-ico"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+            <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+            {!sizeLinked && <line className="size-link-cut" x1="3" y1="3" x2="21" y2="21" />}
+          </svg>
+        </button>
         <label className="field">
           {t("common.height")}
           <div className="input-unit">
@@ -88,29 +112,6 @@ export function PaintStylePanel({
             <em>°</em>
           </div>
         </label>
-        <button
-          type="button"
-          className={`size-link ${sizeLinked ? "active" : ""}`}
-          aria-pressed={sizeLinked}
-          aria-label={t("paint.keepAspect")}
-          title={t("paint.keepAspect")}
-          onClick={onSizeLinkedToggle}
-        >
-          <svg
-            className="size-link-ico"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-            <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-            {!sizeLinked && <line className="size-link-cut" x1="3" y1="3" x2="21" y2="21" />}
-          </svg>
-        </button>
       </div>
 
       <h4>{t("paint.style.line")}</h4>
@@ -198,58 +199,11 @@ export function PaintStylePanel({
         {t("paint.style.active")}
       </label>
       {selectedStyle.fill.enabled && (
-        <div className="fields compact">
-          <label className="field">
-            {t("paint.style.pattern")}
-            <select
-              disabled={!hasSelection}
-              value={selectedStyle.fill.mode}
-              onChange={(e) =>
-                onStyleChange({ fill: { mode: e.target.value as FillMode } as any })
-              }
-            >
-              <option value="hatch">{t("paint.image.hatch")}</option>
-              <option value="dashed-hatch">{t("paint.style.dashedHatch")}</option>
-              <option value="dotted-fill">{t("paint.image.dots")}</option>
-            </select>
-          </label>
-          {selectedStyle.fill.mode !== "dotted-fill" && (
-            <label className="field">
-              {t("paint.style.angle")}
-              <input
-                type="number"
-                step={5}
-                disabled={!hasSelection}
-                value={selectedStyle.fill.angle}
-                onChange={(e) =>
-                  onStyleChange({ fill: { angle: Number(e.target.value) || 0 } as any })
-                }
-              />
-            </label>
-          )}
-          <label className="field">
-            {t("paint.style.spacing")}
-            <input
-              type="number"
-              min={0.5}
-              step={0.5}
-              disabled={!hasSelection}
-              value={
-                selectedStyle.fill.mode === "dotted-fill"
-                  ? selectedStyle.fill.dotSpacing
-                  : selectedStyle.fill.spacing
-              }
-              onChange={(e) =>
-                onStyleChange({
-                  fill:
-                    selectedStyle.fill.mode === "dotted-fill"
-                      ? ({ dotSpacing: Number(e.target.value) || 1 } as any)
-                      : ({ spacing: Number(e.target.value) || 1 } as any),
-                })
-              }
-            />
-          </label>
-        </div>
+        <FillOptions
+          value={selectedStyle.fill}
+          disabled={!hasSelection}
+          onChange={(patch) => onStyleChange({ fill: patch as any })}
+        />
       )}
     </div>
   );

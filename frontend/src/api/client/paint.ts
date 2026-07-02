@@ -29,6 +29,26 @@ export const paintClient = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ids }),
     }),
+  createGroup: (name: string) =>
+    req<PageIndex>("/api/pages/groups", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    }),
+  renameGroup: (groupId: string, name: string) =>
+    req<PageIndex>(`/api/pages/groups/${groupId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    }),
+  deleteGroup: (groupId: string) =>
+    req<PageIndex>(`/api/pages/groups/${groupId}`, { method: "DELETE" }),
+  setPageGroup: (id: string, groupId: string | null) =>
+    req<PageIndex>(`/api/pages/${id}/group`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ groupId }),
+    }),
   // Pass `objects` to plot only that subset (a selection); omit for the whole page.
   pageGcode: (id: string, expected?: ProfileRef | null, objects?: SceneObject[]) =>
     req<Job>(`/api/pages/${id}/gcode`, {

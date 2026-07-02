@@ -13,10 +13,12 @@ import LiveButton from "../stream/LiveButton";
 import { defaultSceneViewBox } from "../paint/SceneView";
 import { useLiveRegistryState } from "../stream/liveRegistry";
 import { useLiveStream } from "../stream/useLiveStream";
-import { localize, type Pt, type Transform } from "../paint/geometry";
+import { localize, transformPolylines, type Pt, type Transform } from "../paint/geometry";
 import { type TextFont } from "../paint/text";
 import { objectStyle, randomTextSeed, textGeometryAsync } from "../paint/sceneObjects";
-import { DEFAULT_VECTOR_STYLE } from "../paint/styling";
+import { DEFAULT_VECTOR_STYLE, type FillStyle } from "../paint/styling";
+import { bucketFillRegion } from "../paint/bucketFill";
+import { FillOptions } from "./paint/FillOptions";
 import { useObjectOps } from "../paint/useObjectOps";
 import { type EraserBrush, ERASER_BRUSH_FACTOR } from "../paint/eraser";
 import { useI18n } from "../i18n";
@@ -47,6 +49,7 @@ export default function Paint({
   const [page, setPage] = useState<Page | null>(null);
   const [tool, setTool] = useState<Tool>("select");
   const [eraserBrush, setEraserBrush] = useState<EraserBrush>("small");
+  const [fillStyle, setFillStyle] = useState<FillStyle>({ ...DEFAULT_VECTOR_STYLE.fill, enabled: true });
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [sending, setSending] = useState(false);
@@ -122,11 +125,57 @@ export default function Paint({
     { value: "circle", label: t("paint.tool.circle"), icon: "◯" },
     { value: "semicircle", label: t("paint.tool.semicircle"), icon: "◗" },
     { value: "text", label: t("paint.tool.text"), icon: "T" },
+    { value: "bucketFill", label: t("paint.tool.bucketFill"), icon: "🪣" },
+    { value: "areaFill", label: t("paint.tool.areaFill"), icon: "▨" },
     { value: "maskCircle", label: t("paint.tool.maskCircle"), icon: "●" },
   ];
   const selectTools = tools.filter((o) => o.value === "select");
-  const drawTools = tools.filter((o) => ["pen", "line", "rect", "maskRect", "maskCircle", "circle", "semicircle", "text"].includes(o.value));
+  const drawTools = tools.filter((o) => ["pen", "line", "rect", "circle", "semicircle", "text"].includes(o.value));
+  const fillTools = tools.filter((o) => o.value === "bucketFill" || o.value === "areaFill");
+  const maskTools = tools.filter((o) => o.value === "maskRect" || o.value === "maskCircle");
   const eraseTools = tools.filter((o) => o.value === "erase" || o.value === "eraseLine");
+  const activeToolMeta = tools.find((o) => o.value === tool);
+  const isFillTool = tool === "bucketFill" || tool === "areaFill";
+
+  // Both fill tools produce a normal closed object with fill.enabled, so the
+  // existing style/render/G-code pipeline (withStyledCache → buildStyledPolylines
+  // → hatchFill) turns it into plottable hatch lines with no backend changes.
+  // Guard against degenerate/empty polygons: an empty localize() yields NaN
+  // centers, which serialise to null and crash the backend's transform math.
+  const makeFillObject = (polygonWorld: Pt[][]): SceneObject | null => {
+    const { local, cx, cy } = localize(polygonWorld);
+    if (!local.some((line) => line.length >= 2) || !Number.isFinite(cx) || !Number.isFinite(cy)) return null;
+    return {
+      id: crypto.randomUUID(),
+      type: "fill",
+      data: { basePolylines: local, style: { ...DEFAULT_VECTOR_STYLE, fill: { ...fillStyle, enabled: true } } },
+      transform: { x: cx, y: cy, rotation: 0, scale: 1 },
+      plotted: false,
+    };
+  };
+
+  const handleBucketFill = (at: Pt) => {
+    if (!page || !cal) return;
+    const world = page.objects
+      .filter((o) => !o.plotted)
+      .flatMap((o) => transformPolylines((o.cachedPolylines ?? []) as Pt[][], o.transform ?? { x: 0, y: 0, rotation: 0, scale: 1 }));
+    const poly = bucketFillRegion(world, at, cal.plot_width, cal.plot_height);
+    const obj = poly && makeFillObject([poly]);
+    if (!obj) { toast.error(t("paint.bucketFillFailed")); return; }
+    ops.addObject(obj);
+  };
+
+  const handleAreaFill = (polygonWorld: Pt[]) => {
+    if (polygonWorld.length < 3) return;
+    const obj = makeFillObject([polygonWorld]);
+    if (!obj) { toast.error(t("paint.bucketFillFailed")); return; }
+    ops.addObject(obj);
+  };
+
+  const selectTool = (v: Tool) => {
+    setTool(v);
+    if (v !== "select") setSelectedIds([]);
+  };
 
   useEffect(() => {
     api.getCalibration().then(setCal).catch(fail);
@@ -336,6 +385,29 @@ export default function Paint({
       if (nextId) return api.getPage(nextId).then(setPage);
       setPage(null);
     }).catch(fail);
+  };
+
+  const newGroup = async () => {
+    const name = await prompt(t("paint.groupNamePrompt"), "");
+    if (name == null || !name.trim()) return;
+    api.createGroup(name.trim()).then(setIndex).catch(fail);
+  };
+
+  const renameGroup = async (id: string, current: string) => {
+    const next = await prompt(t("paint.groupNamePrompt"), current);
+    if (next == null) return;
+    const name = next.trim();
+    if (!name || name === current) return;
+    api.renameGroup(id, name).then(setIndex).catch(fail);
+  };
+
+  const deleteGroup = async (id: string) => {
+    if (!await confirm(t("paint.deleteGroup") + "?")) return;
+    api.deleteGroup(id).then(setIndex).catch(fail);
+  };
+
+  const setPageGroup = (id: string, groupId: string | null) => {
+    api.setPageGroup(id, groupId).then(setIndex).catch(fail);
   };
 
   const setGrid = (patch: Partial<{ step: number; snap: boolean }>) => {
@@ -628,6 +700,10 @@ export default function Paint({
         onDuplicate={duplicate}
         onRemove={remove}
         onReorder={(ids) => api.reorderPages(ids).then(setIndex).catch(fail)}
+        onNewGroup={newGroup}
+        onRenameGroup={renameGroup}
+        onDeleteGroup={deleteGroup}
+        onSetPageGroup={setPageGroup}
         sidebarCollapsed={pagesCollapsed}
         onToggleSidebar={togglePagesCollapsed}
       />
@@ -661,7 +737,8 @@ export default function Paint({
                 ]}
               />
             </label>
-            <div className="paint-job-actions">
+          </div>
+          <div className="paint-job-actions">
               {!desktop && (
                 <LiveButton
                   state={live.state}
@@ -720,7 +797,6 @@ export default function Paint({
               <button disabled={loadingPreview} onClick={openFullscreen}>
                 {loadingPreview ? t("common.loading") : t("convert.fullscreen")}
               </button>
-            </div>
           </div>
         </div>
 
@@ -747,6 +823,37 @@ export default function Paint({
         )}
 
         <div className="paint-workspace">
+          <nav className="paint-tool-rail" aria-label={t("paint.activeTool")}>
+            <div className="rail-group" style={{ flex: selectTools.length }}>
+              <Segmented<Tool> value={tool} onChange={selectTool}
+                options={selectTools.map((o) => ({ value: o.value, label: o.icon, title: o.label }))}
+                className="paint-tool-grid vertical" />
+            </div>
+            <span className="rail-div" />
+            <div className="rail-group" style={{ flex: drawTools.length }}>
+              <Segmented<Tool> value={tool} onChange={selectTool}
+                options={drawTools.map((o) => ({ value: o.value, label: o.icon, title: o.label }))}
+                className="paint-tool-grid vertical" />
+            </div>
+            <span className="rail-div" />
+            <div className="rail-group" style={{ flex: fillTools.length }}>
+              <Segmented<Tool> value={tool} onChange={selectTool}
+                options={fillTools.map((o) => ({ value: o.value, label: o.icon, title: o.label }))}
+                className="paint-tool-grid vertical" />
+            </div>
+            <span className="rail-div" />
+            <div className="rail-group" style={{ flex: maskTools.length }}>
+              <Segmented<Tool> value={tool} onChange={selectTool}
+                options={maskTools.map((o) => ({ value: o.value, label: o.icon, title: o.label }))}
+                className="paint-tool-grid vertical" />
+            </div>
+            <span className="rail-div" />
+            <div className="rail-group" style={{ flex: eraseTools.length }}>
+              <Segmented<Tool> value={tool} onChange={selectTool}
+                options={eraseTools.map((o) => ({ value: o.value, label: o.icon, title: o.label }))}
+                className="paint-tool-grid vertical" />
+            </div>
+          </nav>
           <div className="paint-canvas-wrap">
             <PlotScore pageId={page.id} objects={page.objects} />
             {page.objects.length === 0 && (
@@ -768,6 +875,8 @@ export default function Paint({
               onContextMenuSelection={(ids, x, y) => { setSelectedIds(ids); setMenu({ ids, x, y }); }}
               onImageDrop={(file, at) => setImageImport({ file, at, mode: "edges", detail: 2 })}
               onTextAdd={addTextObject}
+              onBucketFill={handleBucketFill}
+              onAreaFill={handleAreaFill}
               onErase={ops.eraseAcrossObjects}
               eraserRadius={eraserRadius}
               eraserIsPoint={eraserBrush === "point"}
@@ -778,55 +887,89 @@ export default function Paint({
             />
           </div>
 
-          <aside className="paint-tools-card">
-            <div className="paint-tool-section">
-              <h4>{t("paint.section.arrange")}</h4>
-              <Segmented<Tool>
-                value={tool}
-                onChange={(t) => { setTool(t); if (t !== "select") setSelectedIds([]); }}
-                options={selectTools.map((o) => ({ value: o.value, label: o.icon, title: o.label }))}
-                className="paint-tool-grid single"
-              />
-              <div className="paint-tools-actions compact">
-                <button className="ghost" disabled={!hasSelection} onClick={ops.fitSelected}
-                  title={hasSelection ? t("paint.fitSelection") : t("paint.noSelection")} aria-label={t("paint.fit")}>
-                  ⛶
-                </button>
-                <button className="ghost" disabled={!hasSelection} onClick={ops.centerSelected}
-                  title={hasSelection ? t("paint.centerSelection") : t("paint.noSelection")} aria-label={t("paint.center")}>
-                  ⌖
-                </button>
-                <button className="ghost" disabled={!hasSelection} onClick={() => ops.moveSelected(-1)}
-                  title={hasSelection ? t("paint.moveBack") : t("paint.noSelection")} aria-label={t("paint.toBack")}>
-                  ⤓
-                </button>
-                <button className="ghost" disabled={!hasSelection} onClick={() => ops.moveSelected(1)}
-                  title={hasSelection ? t("paint.moveFront") : t("paint.noSelection")} aria-label={t("paint.toFront")}>
-                  ⤒
-                </button>
+          <aside className="paint-context-panel">
+            <div className="ctx-header">
+              <div className="ctx-active-tool">
+                <span className="muted">{t("paint.activeTool")}</span>
+                <strong>{activeToolMeta ? activeToolMeta.label : ""}</strong>
               </div>
-            </div>
-
-            <div className="paint-tool-section">
-              <h4>{t("paint.section.create")}</h4>
-              <Segmented<Tool>
-                value={tool}
-                onChange={(t) => { setTool(t); if (t !== "select") setSelectedIds([]); }}
-                options={drawTools.map((o) => ({ value: o.value, label: o.icon, title: o.label }))}
-                className="paint-tool-grid"
+              <div className="paint-tools-actions ctx-actions">
+                <button className="ghost" disabled={ops.history.undo === 0} onClick={ops.undo}
+                  title={t("paint.undo")} aria-label={t("paint.undo")}>↶</button>
+                <button className="ghost" disabled={ops.history.redo === 0} onClick={ops.redo}
+                  title={t("paint.redo")} aria-label={t("paint.redo")}>↷</button>
+                <button className="ghost" disabled={!hasSelection} onClick={ops.copySelected}
+                  title={hasSelection ? t("paint.copySelection") : t("paint.noSelection")} aria-label={t("paint.copy")}>⧉</button>
+                <button className="ghost" disabled={!hasSelection} onClick={ops.cutSelected}
+                  title={hasSelection ? t("paint.cutSelection") : t("paint.noSelection")} aria-label={t("paint.cut")}>✂</button>
+                <button className="ghost" disabled={ops.clipboardCount === 0} onClick={() => ops.pasteObjects()}
+                  title={ops.clipboardCount > 0 ? t("paint.pasteSelection") : t("paint.clipboardEmpty")} aria-label={t("paint.paste")}>
+                  ⎘{ops.clipboardCount > 1 ? <span className="act-count">{ops.clipboardCount}</span> : ""}
+                </button>
+                <button className="ghost" disabled={!hasSelection} onClick={ops.duplicateSelected}
+                  title={hasSelection ? t("paint.duplicateSelection") : t("paint.noSelection")} aria-label={t("paint.duplicate")}>⧉</button>
+                <button className="ghost" disabled={selectedObjects.length < 2} onClick={() => ops.groupSelected()}
+                  title={selectedObjects.length >= 2 ? t("paint.groupSelection") : t("paint.needTwoObjects")} aria-label={t("paint.group")}>⊞</button>
+                <button className="ghost" disabled={!selectedObjects.some((obj) => obj.groupId)} onClick={() => ops.ungroupSelected()}
+                  title={selectedObjects.some((obj) => obj.groupId) ? t("paint.ungroupSelection") : t("paint.noGroupSelected")} aria-label={t("paint.ungroup")}>⊟</button>
+              </div>
+              <div className="paint-asset-row">
+                <button className="ghost" title={t("gallery.button")} aria-label={t("gallery.button")}
+                  onClick={() => setGalleryOpen(true)}>▦</button>
+                <button className="ghost" title={t("paint.imageImport")} aria-label={t("paint.imageImport")}
+                  onClick={() => imageInputRef.current?.click()}>🖼</button>
+                <button className="ghost" title={t("paint.md.button")} aria-label={t("paint.md.button")}
+                  onClick={() => setMdOpen(true)}>⌶</button>
+              </div>
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={(e) => { pickImage(e.target.files?.[0]); e.target.value = ""; }}
               />
             </div>
 
-            <div className="paint-tool-section">
-              <h4>{t("paint.section.erase")}</h4>
-              <Segmented<Tool>
-                value={tool}
-                onChange={(t) => { setTool(t); if (t !== "select") setSelectedIds([]); }}
-                options={eraseTools.map((o) => ({ value: o.value, label: o.icon, title: o.label }))}
-                className="paint-tool-grid erase"
-              />
-              {(tool === "erase" || tool === "eraseLine") && (
+            <div className="ctx-body" key={tool}>
+              {tool === "select" && (
                 <>
+                  <div className="paint-tool-section">
+                    <h4>{t("paint.section.arrange")}</h4>
+                    <div className="paint-tools-actions compact">
+                      <button className="ghost" disabled={!hasSelection} onClick={ops.fitSelected}
+                        title={hasSelection ? t("paint.fitSelection") : t("paint.noSelection")} aria-label={t("paint.fit")}>⛶</button>
+                      <button className="ghost" disabled={!hasSelection} onClick={ops.centerSelected}
+                        title={hasSelection ? t("paint.centerSelection") : t("paint.noSelection")} aria-label={t("paint.center")}>⌖</button>
+                      <button className="ghost" disabled={!hasSelection} onClick={() => ops.moveSelected(-1)}
+                        title={hasSelection ? t("paint.moveBack") : t("paint.noSelection")} aria-label={t("paint.toBack")}>⤓</button>
+                      <button className="ghost" disabled={!hasSelection} onClick={() => ops.moveSelected(1)}
+                        title={hasSelection ? t("paint.moveFront") : t("paint.noSelection")} aria-label={t("paint.toFront")}>⤒</button>
+                      <button className="ghost" disabled={!hasSelection} onClick={ops.deleteSelected}
+                        title={hasSelection ? t("paint.deleteSelection") : t("paint.noSelection")} aria-label={t("paint.delete")}>
+                        🗑{selectedObjects.length > 1 ? <span className="act-count">{selectedObjects.length}</span> : ""}
+                      </button>
+                      <button className="ghost" disabled={!hasSelection} onClick={ops.convertSelectedToLines}
+                        title={hasSelection ? t("paint.convertToLines") : t("paint.noSelection")} aria-label={t("paint.convertToLines")}>⇄</button>
+                    </div>
+                  </div>
+                  <PaintStylePanel
+                    hasSelection={hasSelection}
+                    selectedObjectSize={selectedObjectSize}
+                    selectedObjectRotation={selectedObjectRotation}
+                    selectedStyle={selectedStyle}
+                    sizeLinked={sizeLinked}
+                    onSizeLinkedToggle={() => setSizeLinked((v) => !v)}
+                    onWidthChange={(v) => ops.setSelectedObjectSize("width", v)}
+                    onHeightChange={(v) => ops.setSelectedObjectSize("height", v)}
+                    onRotationChange={ops.setSelectedObjectRotation}
+                    onStyleChange={ops.updateSelectedStyle}
+                  />
+                </>
+              )}
+
+              {(tool === "erase" || tool === "eraseLine") && (
+                <div className="paint-tool-section">
+                  <h4>{t("paint.section.erase")}</h4>
                   <Segmented<EraserBrush>
                     value={eraserBrush}
                     onChange={setEraserBrush}
@@ -841,85 +984,16 @@ export default function Paint({
                   {eraserBrush !== "point" && (
                     <div className="coloring-brush-hint">⌀ {Math.round(eraserRadius * 2)} mm</div>
                   )}
-                </>
+                </div>
               )}
-              <div className="paint-tools-actions compact">
-                <button className="ghost" disabled={!hasSelection} onClick={ops.deleteSelected}
-                  title={hasSelection ? t("paint.deleteSelection") : t("paint.noSelection")} aria-label={t("paint.delete")}>
-                  🗑{selectedObjects.length > 1 ? <span className="act-count">{selectedObjects.length}</span> : ""}
-                </button>
-                <button className="ghost" disabled={!hasSelection} onClick={ops.convertSelectedToLines}
-                  title={hasSelection ? t("paint.convertToLines") : t("paint.noSelection")} aria-label={t("paint.convertToLines")}>
-                  ⇄
-                </button>
-              </div>
-            </div>
 
-            <input
-              ref={imageInputRef}
-              type="file"
-              accept="image/*"
-              style={{ display: "none" }}
-              onChange={(e) => { pickImage(e.target.files?.[0]); e.target.value = ""; }}
-            />
-            <div className="paint-tool-section">
-              <h4>{t("paint.section.clipboard")}</h4>
-              <div className="paint-tools-actions">
-                <button className="ghost" disabled={ops.history.undo === 0} onClick={ops.undo}
-                  title={t("paint.undo")} aria-label={t("paint.undo")}>
-                  ↶
-                </button>
-                <button className="ghost" disabled={ops.history.redo === 0} onClick={ops.redo}
-                  title={t("paint.redo")} aria-label={t("paint.redo")}>
-                  ↷
-                </button>
-                <button className="ghost" disabled={!hasSelection} onClick={ops.copySelected}
-                  title={hasSelection ? t("paint.copySelection") : t("paint.noSelection")} aria-label={t("paint.copy")}>
-                  ⧉
-                </button>
-                <button className="ghost" disabled={!hasSelection} onClick={ops.cutSelected}
-                  title={hasSelection ? t("paint.cutSelection") : t("paint.noSelection")} aria-label={t("paint.cut")}>
-                  ✂
-                </button>
-                <button className="ghost" disabled={ops.clipboardCount === 0} onClick={() => ops.pasteObjects()}
-                  title={ops.clipboardCount > 0 ? t("paint.pasteSelection") : t("paint.clipboardEmpty")} aria-label={t("paint.paste")}>
-                  ⎘{ops.clipboardCount > 1 ? <span className="act-count">{ops.clipboardCount}</span> : ""}
-                </button>
-                <button className="ghost" disabled={!hasSelection} onClick={ops.duplicateSelected}
-                  title={hasSelection ? t("paint.duplicateSelection") : t("paint.noSelection")} aria-label={t("paint.duplicate")}>
-                  ⧉
-                </button>
-                <button className="ghost" disabled={selectedObjects.length < 2} onClick={() => ops.groupSelected()}
-                  title={selectedObjects.length >= 2 ? t("paint.groupSelection") : t("paint.needTwoObjects")} aria-label={t("paint.group")}>
-                  ⊞
-                </button>
-                <button className="ghost" disabled={!selectedObjects.some((obj) => obj.groupId)} onClick={() => ops.ungroupSelected()}
-                  title={selectedObjects.some((obj) => obj.groupId) ? t("paint.ungroupSelection") : t("paint.noGroupSelected")} aria-label={t("paint.ungroup")}>
-                  ⊟
-                </button>
-              </div>
-              <div className="paint-asset-row">
-                <button className="ghost" title={t("gallery.button")} aria-label={t("gallery.button")}
-                  onClick={() => setGalleryOpen(true)}>▦</button>
-                <button className="ghost" title={t("paint.imageImport")} aria-label={t("paint.imageImport")}
-                  onClick={() => imageInputRef.current?.click()}>🖼</button>
-                <button className="ghost" title={t("paint.md.button")} aria-label={t("paint.md.button")}
-                  onClick={() => setMdOpen(true)}>⌶</button>
-              </div>
+              {isFillTool && (
+                <div className="paint-tool-section">
+                  <h4>{t("paint.fillOptions")}</h4>
+                  <FillOptions value={fillStyle} onChange={(patch) => setFillStyle((f) => ({ ...f, ...patch }))} />
+                </div>
+              )}
             </div>
-
-            <PaintStylePanel
-              hasSelection={hasSelection}
-              selectedObjectSize={selectedObjectSize}
-              selectedObjectRotation={selectedObjectRotation}
-              selectedStyle={selectedStyle}
-              sizeLinked={sizeLinked}
-              onSizeLinkedToggle={() => setSizeLinked((v) => !v)}
-              onWidthChange={(v) => ops.setSelectedObjectSize("width", v)}
-              onHeightChange={(v) => ops.setSelectedObjectSize("height", v)}
-              onRotationChange={ops.setSelectedObjectRotation}
-              onStyleChange={ops.updateSelectedStyle}
-            />
           </aside>
         </div>
 
@@ -938,6 +1012,10 @@ export default function Paint({
             ? t("paint.hint.select")
             : tool === "text"
               ? t("paint.hint.text")
+            : tool === "bucketFill"
+              ? t("paint.hint.bucketFill")
+            : tool === "areaFill"
+              ? t("paint.hint.areaFill")
             : t("paint.hint.draw")}
         </p>
       </section>

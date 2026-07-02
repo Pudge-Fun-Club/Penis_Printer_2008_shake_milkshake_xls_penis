@@ -83,6 +83,50 @@ class TestDocumentStore:
         assert s.list_pages()["activeId"] == a
         assert b  # silences lint
 
+    def test_meta_carries_group_id(self, workspace):
+        s = _store(workspace)
+        page = s.create_page()
+        meta = next(m for m in s.list_pages()["order"] if m["id"] == page["id"])
+        assert meta["groupId"] is None
+
+    def test_create_and_assign_group(self, workspace):
+        s = _store(workspace)
+        page = s.create_page()
+        idx = s.create_group("Poster")
+        gid = idx["groups"][0]["id"]
+        assert idx["groups"][0]["name"] == "Poster"
+        s.set_page_group(page["id"], gid)
+        meta = next(m for m in s.list_pages()["order"] if m["id"] == page["id"])
+        assert meta["groupId"] == gid
+        assert s.get_page(page["id"])["groupId"] == gid
+
+    def test_rename_group(self, workspace):
+        s = _store(workspace)
+        gid = s.create_group("A")["groups"][0]["id"]
+        idx = s.rename_group(gid, "B")
+        assert idx["groups"][0]["name"] == "B"
+
+    def test_set_page_group_none_clears_it(self, workspace):
+        s = _store(workspace)
+        page = s.create_page()
+        gid = s.create_group("Poster")["groups"][0]["id"]
+        s.set_page_group(page["id"], gid)
+        s.set_page_group(page["id"], None)
+        meta = next(m for m in s.list_pages()["order"] if m["id"] == page["id"])
+        assert meta["groupId"] is None
+        assert "groupId" not in s.get_page(page["id"])
+
+    def test_delete_group_ungroups_pages(self, workspace):
+        s = _store(workspace)
+        page = s.create_page()
+        gid = s.create_group("Poster")["groups"][0]["id"]
+        s.set_page_group(page["id"], gid)
+        idx = s.delete_group(gid)
+        assert idx["groups"] == []
+        meta = next(m for m in idx["order"] if m["id"] == page["id"])
+        assert meta["groupId"] is None
+        assert "groupId" not in s.get_page(page["id"])
+
 
 class TestPagesApi:
     def test_crud_roundtrip(self, workspace):
@@ -102,6 +146,18 @@ class TestPagesApi:
             assert c.post("/api/pages", json={}).status_code == 200
             assert len(c.get("/api/pages").json()["order"]) == 2
             assert c.get("/api/pages/nonexistent").status_code == 404
+
+            # manual folders: create, assign, then delete un-groups the page
+            gidx = c.post("/api/pages/groups", json={"name": "Poster"}).json()
+            gid = gidx["groups"][0]["id"]
+            assigned = c.post(f"/api/pages/{pid}/group", json={"groupId": gid}).json()
+            meta = next(m for m in assigned["order"] if m["id"] == pid)
+            assert meta["groupId"] == gid
+            deleted = c.delete(f"/api/pages/groups/{gid}").json()
+            assert deleted["groups"] == []
+            meta = next(m for m in deleted["order"] if m["id"] == pid)
+            assert meta["groupId"] is None
+            assert c.post("/api/pages/nonexistent/group", json={"groupId": None}).status_code == 404
         document._doc = None
 
     def test_score_and_preview3d_are_transient(self, cal, workspace):

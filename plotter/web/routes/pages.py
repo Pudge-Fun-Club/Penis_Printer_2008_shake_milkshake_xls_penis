@@ -47,10 +47,9 @@ def _page_profile_status(page: dict, active: dict, profiles: dict[str, dict]) ->
     return "active"
 
 
-@router.get("/pages")
-def list_pages() -> dict:
-    """Ordered page metadata + the active page id + the active profile."""
-    index = store().list_pages()
+def _index_response(index: dict) -> dict:
+    """Enrich a raw store index with per-page profile status + active profile,
+    so any index-returning endpoint gives the frontend a complete PageIndex."""
     service = ProfileService()
     active = service.active_profile_meta()
     profiles = _profiles_by_id(service)
@@ -62,6 +61,12 @@ def list_pages() -> dict:
         ],
         "activeProfile": active,
     }
+
+
+@router.get("/pages")
+def list_pages() -> dict:
+    """Ordered page metadata + the active page id + the active profile."""
+    return _index_response(store().list_pages())
 
 
 @router.get("/pages/{page_id}")
@@ -162,6 +167,41 @@ class ReorderRequest(BaseModel):
 @router.post("/pages/reorder")
 def reorder_pages(req: ReorderRequest) -> dict:
     return store().reorder_pages(req.ids)
+
+
+class GroupCreateRequest(BaseModel):
+    name: str
+
+
+class GroupRenameRequest(BaseModel):
+    name: str
+
+
+class PageGroupRequest(BaseModel):
+    groupId: str | None = None
+
+
+@router.post("/pages/groups")
+def create_group(req: GroupCreateRequest) -> dict:
+    return _index_response(store().create_group(req.name))
+
+
+@router.put("/pages/groups/{group_id}")
+def rename_group(group_id: str, req: GroupRenameRequest) -> dict:
+    return _index_response(store().rename_group(group_id, req.name))
+
+
+@router.delete("/pages/groups/{group_id}")
+def delete_group(group_id: str) -> dict:
+    return _index_response(store().delete_group(group_id))
+
+
+@router.post("/pages/{page_id}/group")
+def set_page_group(page_id: str, req: PageGroupRequest) -> dict:
+    try:
+        return _index_response(store().set_page_group(page_id, req.groupId))
+    except KeyError as exc:
+        raise HTTPException(404, "Seite nicht gefunden") from exc
 
 
 class PageGcodeRequest(ExpectedProfileRequest):

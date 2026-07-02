@@ -37,7 +37,7 @@ import {
 import { lineNearPath } from "../paint/eraser";
 import { useI18n } from "../i18n";
 
-export type Tool = "select" | "pen" | "line" | "rect" | "maskRect" | "maskCircle" | "circle" | "semicircle" | "text" | "erase" | "eraseLine";
+export type Tool = "select" | "pen" | "line" | "rect" | "maskRect" | "maskCircle" | "circle" | "semicircle" | "text" | "erase" | "eraseLine" | "bucketFill" | "areaFill";
 export type { ViewRotation } from "../paint/viewTransform";
 
 /**
@@ -71,7 +71,7 @@ function clampedTransform(t: Transform, local: Pt[][], W: number, H: number): Tr
 }
 
 function shapeWorld(tool: Tool, pts: Pt[]): Pt[][] {
-  if (tool === "pen") return pts.length > 1 ? [pts] : [];
+  if (tool === "pen" || tool === "areaFill") return pts.length > 1 ? [pts] : [];
   const [a, b] = pts;
   if (!b) return [];
   if (tool === "line") return [lineWorld(a, b)];
@@ -112,6 +112,8 @@ export default function PaintCanvas({
   onContextMenuSelection,
   onImageDrop,
   onTextAdd,
+  onBucketFill,
+  onAreaFill,
   onErase,
   onCursorMove,
   onCursorClick,
@@ -132,6 +134,8 @@ export default function PaintCanvas({
   onContextMenuSelection: (ids: string[], x: number, y: number) => void;
   onImageDrop: (file: File, at: Pt) => void;
   onTextAdd: (at: Pt) => void;
+  onBucketFill?: (at: Pt) => void;
+  onAreaFill?: (polygonWorld: Pt[]) => void;
   onErase: (points: Pt[], mode: "free" | "line", radius: number) => void;
   onCursorMove?: (cursor: { x: number; y: number; inside: boolean; tool: Tool }) => void;
   onCursorClick?: (click: { x: number; y: number; tool: Tool }) => void;
@@ -338,8 +342,14 @@ export default function PaintCanvas({
       onTextAdd(p);
       return;
     }
+    if (activeTool === "bucketFill") {
+      if (e.button !== 0) return;
+      onBucketFill?.(toMM(e));
+      return;
+    }
     svgRef.current!.setPointerCapture(e.pointerId);
-    const p = activeTool === "pen" || activeTool === "erase" || activeTool === "eraseLine" ? toMM(e) : snapPt(toMM(e), step, snapOn);
+    const freehand = activeTool === "pen" || activeTool === "areaFill" || activeTool === "erase" || activeTool === "eraseLine";
+    const p = freehand ? toMM(e) : snapPt(toMM(e), step, snapOn);
     setDraft({ tool: activeTool, points: [p, p] });
   };
 
@@ -366,7 +376,7 @@ export default function PaintCanvas({
       return;
     }
     if (draft) {
-      if (draft.tool === "pen" || draft.tool === "erase" || draft.tool === "eraseLine") {
+      if (draft.tool === "pen" || draft.tool === "areaFill" || draft.tool === "erase" || draft.tool === "eraseLine") {
         const pts = draft.points.slice();
         const coalesced = (e.nativeEvent as any).getCoalescedEvents?.() ?? [e.nativeEvent];
         for (const ce of coalesced) {
@@ -549,6 +559,12 @@ export default function PaintCanvas({
         setDraft(null);
         return;
       }
+      if (draft.tool === "areaFill") {
+        const pts = simplify(draft.points, PEN_SIMPLIFY_EPS / zoom);
+        if (pts.length >= 3) onAreaFill?.([...pts, pts[0]]); // explicitly close so closedLine() detects it
+        setDraft(null);
+        return;
+      }
       const world =
         draft.tool === "pen" ? [simplify(draft.points, PEN_SIMPLIFY_EPS / zoom)] : shapeWorld(draft.tool, draft.points);
       const flat = world.flat();
@@ -713,7 +729,7 @@ export default function PaintCanvas({
   const canvasRotationTransform = `rotate(${viewRotation} ${W / 2} ${H / 2})`;
 
   const draftWorld = draft
-    ? draft.tool === "pen" || draft.tool === "erase" || draft.tool === "eraseLine"
+    ? draft.tool === "pen" || draft.tool === "areaFill" || draft.tool === "erase" || draft.tool === "eraseLine"
       ? [draft.points]
       : shapeWorld(draft.tool, draft.points)
     : [];
@@ -852,7 +868,9 @@ export default function PaintCanvas({
 
         {/* live draft preview */}
         {draftWorld.map((line, i) => (
-          <path key={`d${i}`} d={toPath(line as Pt[])} fill="none"
+          <path key={`d${i}`} d={toPath(line as Pt[])}
+            fill={draft?.tool === "areaFill" ? "var(--busy)" : "none"}
+            fillOpacity={draft?.tool === "areaFill" ? 0.14 : undefined}
             stroke={draft?.tool === "erase" || draft?.tool === "eraseLine" ? "var(--err)" : "var(--busy)"}
             strokeWidth={draft?.tool === "erase" || draft?.tool === "eraseLine" ? effRadius * 2 : STROKE}
             strokeDasharray={draft?.tool === "eraseLine" ? `${STROKE * 2} ${STROKE}` : undefined}

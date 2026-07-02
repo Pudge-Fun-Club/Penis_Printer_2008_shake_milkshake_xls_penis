@@ -9,6 +9,7 @@ interface Group {
   label: string;
   active: boolean;
   items: PageMeta[];
+  folderId?: string; // set for manual folders (drop target + rename/delete)
 }
 
 export default function PagePanel({
@@ -22,6 +23,10 @@ export default function PagePanel({
   onDuplicate,
   onRemove,
   onReorder,
+  onNewGroup,
+  onRenameGroup,
+  onDeleteGroup,
+  onSetPageGroup,
   sidebarCollapsed = false,
   onToggleSidebar,
 }: {
@@ -35,6 +40,10 @@ export default function PagePanel({
   onDuplicate: (id: string) => void;
   onRemove: (id: string) => void;
   onReorder: (ids: string[]) => void;
+  onNewGroup: () => void;
+  onRenameGroup: (id: string, current: string) => void;
+  onDeleteGroup: (id: string) => void;
+  onSetPageGroup: (id: string, groupId: string | null) => void;
   sidebarCollapsed?: boolean;
   onToggleSidebar?: () => void;
 }) {
@@ -82,9 +91,25 @@ export default function PagePanel({
             return b.modified - a.modified;
           });
 
+    // Manual folders come first (shown even when empty so they stay a drop
+    // target); pages without a folder fall back to profile grouping.
+    const folders: Group[] = (index.groups ?? []).map((g) => ({
+      key: "folder:" + g.id,
+      label: g.name,
+      active: false,
+      items: [],
+      folderId: g.id,
+    }));
+    const folderById = new Map(folders.map((f) => [f.folderId!, f]));
+
     const map = new Map<string, Group>();
     const noProfile = t("paint.badgeNoProfile");
     for (const m of sorted) {
+      const folder = m.groupId ? folderById.get(m.groupId) : undefined;
+      if (folder) {
+        folder.items.push(m);
+        continue;
+      }
       const key = m.profileId ?? "__none__";
       const isActive = !!m.profileId && m.profileId === activeProfileId;
       let g = map.get(key);
@@ -94,15 +119,19 @@ export default function PagePanel({
       }
       g.items.push(m);
     }
-    // Active profile first, the rest alphabetically by label.
-    return [...map.values()].sort((a, b) =>
+    // Folders first (in their stored order), then profile groups with the
+    // active profile first and the rest alphabetically by label.
+    const profileGroups = [...map.values()].sort((a, b) =>
       a.active === b.active ? a.label.localeCompare(b.label) : a.active ? -1 : 1
     );
-  }, [index.order, query, sort, activeProfileId, t]);
+    return [...folders, ...profileGroups];
+  }, [index.order, index.groups, query, sort, activeProfileId, t]);
 
-  const multiGroup = groups.length > 1;
+  const multiGroup = groups.length > 1 || (index.groups?.length ?? 0) > 0;
   const isGroupCollapsed = (g: Group) =>
-    groupCollapsed[g.key] ?? (!g.active && !g.items.some((m) => m.id === activePageId));
+    // Folders default open (so they're usable drop targets); profile groups
+    // default open only when active or holding the current page.
+    groupCollapsed[g.key] ?? (!g.folderId && !g.active && !g.items.some((m) => m.id === activePageId));
 
   const renderItem = (m: PageMeta) => (
     <li
@@ -160,6 +189,9 @@ export default function PagePanel({
             </span>
           </div>
           <div className="page-acts" onClick={(e) => e.stopPropagation()}>
+            {m.groupId && (
+              <button className="ghost tiny" title={t("paint.removeFromGroup")} aria-label={t("paint.removeFromGroup")} onClick={() => onSetPageGroup(m.id, null)}>⊘</button>
+            )}
             <button className="ghost tiny" title={t("paint.rename")} onClick={() => onRename(m.id, m.name)}>✎</button>
             <button className="ghost tiny" title={t("paint.duplicate")} onClick={() => onDuplicate(m.id)}>⧉</button>
             <button className="ghost tiny" title={t("paint.delete")} onClick={() => onRemove(m.id)}>✕</button>
@@ -173,6 +205,7 @@ export default function PagePanel({
     <aside className={`paint-pages${sidebarCollapsed ? " collapsed" : ""}`}>
       <div className="paint-pages-head">
         {!sidebarCollapsed && <h3>{t("paint.pages")}</h3>}
+        {!sidebarCollapsed && <button className="ghost tiny" title={t("paint.newGroup")} onClick={onNewGroup} aria-label={t("paint.newGroup")}>🗂</button>}
         {!sidebarCollapsed && <button className="ghost tiny" title={t("paint.newPage")} onClick={onNew}>＋</button>}
         <button
           className="ghost tiny pages-collapse-btn"
@@ -219,15 +252,36 @@ export default function PagePanel({
             multiGroup ? (
               <div className={"page-group" + (g.active ? " active-group" : "")} key={g.key}>
                 {!sidebarCollapsed && (
-                  <button
-                    className="page-group-head"
-                    onClick={() => setGroupCollapsed((c) => ({ ...c, [g.key]: !isGroupCollapsed(g) }))}
-                    aria-expanded={!isGroupCollapsed(g)}
-                  >
-                    <span className="page-group-caret">{isGroupCollapsed(g) ? "▸" : "▾"}</span>
-                    <span className="page-group-name">{g.label}</span>
-                    <span className="page-group-count">{g.items.length}</span>
-                  </button>
+                  g.folderId ? (
+                    <div
+                      className={"page-group-head folder" + (dropId === g.key ? " drop-target" : "")}
+                      onDragOver={dragId ? (e) => { e.preventDefault(); setDropId(g.key); } : undefined}
+                      onDragLeave={() => setDropId((d) => (d === g.key ? null : d))}
+                      onDrop={dragId ? (e) => { e.preventDefault(); onSetPageGroup(dragId, g.folderId!); setDragId(null); setDropId(null); } : undefined}
+                    >
+                      <button
+                        className="page-group-caret-btn"
+                        onClick={() => setGroupCollapsed((c) => ({ ...c, [g.key]: !isGroupCollapsed(g) }))}
+                        aria-expanded={!isGroupCollapsed(g)}
+                      >
+                        <span className="page-group-caret">{isGroupCollapsed(g) ? "▸" : "▾"}</span>
+                        <span className="page-group-name">🗂 {g.label}</span>
+                        <span className="page-group-count">{g.items.length}</span>
+                      </button>
+                      <button className="ghost tiny" title={t("paint.renameGroup")} aria-label={t("paint.renameGroup")} onClick={() => onRenameGroup(g.folderId!, g.label)}>✎</button>
+                      <button className="ghost tiny" title={t("paint.deleteGroup")} aria-label={t("paint.deleteGroup")} onClick={() => onDeleteGroup(g.folderId!)}>✕</button>
+                    </div>
+                  ) : (
+                    <button
+                      className="page-group-head"
+                      onClick={() => setGroupCollapsed((c) => ({ ...c, [g.key]: !isGroupCollapsed(g) }))}
+                      aria-expanded={!isGroupCollapsed(g)}
+                    >
+                      <span className="page-group-caret">{isGroupCollapsed(g) ? "▸" : "▾"}</span>
+                      <span className="page-group-name">{g.label}</span>
+                      <span className="page-group-count">{g.items.length}</span>
+                    </button>
+                  )
                 )}
                 {(sidebarCollapsed || !isGroupCollapsed(g)) && <ul className="page-list">{g.items.map(renderItem)}</ul>}
               </div>

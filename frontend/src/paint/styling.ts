@@ -181,6 +181,10 @@ function applyFill(base: Pt[][], fill: FillStyle): Pt[][] {
   const poly = closedLine(base);
   if (!poly) return [];
   if (fill.mode === "dotted-fill") return dottedFill(poly, fill);
+  if (fill.mode === "crosshatch")
+    return [...hatchFill(poly, fill), ...hatchFill(poly, { ...fill, angle: fill.angle + 90 })];
+  if (fill.mode === "chaos")
+    return [0, 60, 120].flatMap((a) => hatchFill(poly, { ...fill, angle: fill.angle + a }));
   return hatchFill(poly, fill);
 }
 
