@@ -4,6 +4,7 @@ import { useI18n } from "../../i18n";
 import LiveButton from "../stream/components/LiveButton";
 import { stopGlobalLive, useLiveRegistryState } from "../stream/lib/liveRegistry";
 import { useLiveStream } from "../stream/hooks/useLiveStream";
+import { useLiveSource } from "../../hooks/useLiveSource";
 import OsmMapEditor from "../osm/OsmMapEditor";
 import StlEditor from "../stl/StlEditor";
 import { resultToSvgLayers } from "../stl/lib";
@@ -120,11 +121,14 @@ export default function Games({ visible = true, onOpenPaint, desktop = false }: 
   const fail = (e: any) => setErr(String(e.message ?? e));
 
   useEffect(() => { api.getCalibration().then(setCal).catch(fail); }, []);
-  useEffect(() => { if (live.state === "live") live.sendSnapshot("snapshot"); }, [preview, showMazeSolution, showSudokuSolution, live.state]);
-  useEffect(() => { if (visible || live.state !== "live") return; live.sendPlaceholder("games-hidden"); }, [visible, live.state]);
+  useLiveSource(live, {
+    visible,
+    hiddenReason: "games-hidden",
+    onError: toast.error,
+    snapshotDeps: [preview, showMazeSolution, showSudokuSolution],
+  });
   useEffect(() => { if (!preview || !cal) return; if (!globalLive.active || globalLive.sourceId === "games") return; live.start(); }, [preview, cal, globalLive.active, globalLive.sourceId]);
   useEffect(() => { if (err) toast.error(err); }, [err, toast]);
-  useEffect(() => { if (live.error) toast.error(live.error); }, [live.error, toast]);
 
   const resetPreview = () => { setPreview(null); setErr(null); };
 

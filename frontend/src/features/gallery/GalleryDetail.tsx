@@ -12,6 +12,7 @@ import type { Gcode3DView } from "../../components/Gcode3D";
 import Gcode3DOverlay from "../../components/Gcode3DOverlay";
 import LiveButton from "../stream/components/LiveButton";
 import { useLiveStream } from "../stream/hooks/useLiveStream";
+import { useLiveSource } from "../../hooks/useLiveSource";
 import Modal from "../../components/Modal";
 import PolylinePreview from "../../components/PolylinePreview";
 import ScoreBadge from "../../components/ScoreBadge";
@@ -222,18 +223,12 @@ export default function GalleryDetail({
     if (view === "3d" && gcode) live.start();
   }, [autoLive, view, svg, gcode, live.activeSourceId]);
 
-  useEffect(() => {
-    if (live.error) toast.error(live.error);
-  }, [live.error, toast]);
-
-  useEffect(() => {
-    if (live.state === "live") live.sendSnapshot("snapshot");
-  }, [view, svg, gcode, gcode3dView, showTravels, live.state]);
-
-  useEffect(() => {
-    if (visible || live.state !== "live") return;
-    live.sendPlaceholder("gallery-hidden");
-  }, [visible, live.state]);
+  useLiveSource(live, {
+    visible,
+    hiddenReason: "gallery-hidden",
+    onError: toast.error,
+    snapshotDeps: [view, svg, gcode, gcode3dView, showTravels],
+  });
 
   const close = () => {
     if (live.state === "live") live.sendPlaceholder("gallery-closed");

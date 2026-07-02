@@ -13,6 +13,7 @@ import LiveButton from "../stream/components/LiveButton";
 import { defaultSceneViewBox } from "./components/SceneView";
 import { useLiveRegistryState } from "../stream/lib/liveRegistry";
 import { useLiveStream } from "../stream/hooks/useLiveStream";
+import { useLiveSource } from "../../hooks/useLiveSource";
 import { localize, transformPolylines, type Pt, type Transform } from "./lib/geometry";
 import { type TextFont } from "./lib/text";
 import { objectStyle, randomTextSeed, textGeometryAsync } from "./lib/sceneObjects";
@@ -260,18 +261,12 @@ export default function Paint({
       .catch(() => api.getCalibration().then(apply).catch(fail));
   }, [page?.profileId, page?.profileFingerprint]);
 
-  useEffect(() => {
-    if (live.state === "live") live.sendSnapshot("snapshot");
-  }, [cal, page?.id, page?.name, page?.grid, page?.objects, viewRotation, fullscreen, gcode3dView, live.state]);
-
-  useEffect(() => {
-    if (visible || live.state !== "live") return;
-    live.sendPlaceholder("designer-hidden");
-  }, [visible, live.state]);
-
-  useEffect(() => {
-    if (live.error) toast.error(live.error);
-  }, [live.error, toast]);
+  useLiveSource(live, {
+    visible,
+    hiddenReason: "designer-hidden",
+    onError: toast.error,
+    snapshotDeps: [cal, page?.id, page?.name, page?.grid, page?.objects, viewRotation, fullscreen, gcode3dView],
+  });
 
   useEffect(() => {
     if (!visible || !cal || !page) return;
