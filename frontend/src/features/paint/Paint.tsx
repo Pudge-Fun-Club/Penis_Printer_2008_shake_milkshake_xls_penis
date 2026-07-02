@@ -19,15 +19,16 @@ import { type TextFont } from "./lib/text";
 import { objectStyle, randomTextSeed, textGeometryAsync } from "./lib/sceneObjects";
 import { DEFAULT_VECTOR_STYLE, type FillStyle } from "./lib/styling";
 import { bucketFillRegion } from "./lib/bucketFill";
-import { FillOptions } from "./components/FillOptions";
 import { useObjectOps } from "./hooks/useObjectOps";
+import { usePaintShortcuts } from "./hooks/usePaintShortcuts";
 import { type EraserBrush, ERASER_BRUSH_FACTOR } from "./lib/eraser";
 import { useI18n } from "../../i18n";
 import { useToasts } from "../../components/Toasts";
 import { useConfirm, usePrompt } from "../../components/dialogs";
 import { PaintImageModal, type ImageMode } from "./components/PaintImageModal";
 import { PaintTextPanel } from "./components/PaintTextPanel";
-import { PaintStylePanel } from "./components/PaintStylePanel";
+import PaintContextPanel from "./components/PaintContextPanel";
+import PaintToolRail, { paintTools } from "./components/PaintToolRail";
 
 const GRID_STEPS = [1, 5, 10, 25, 50];
 
@@ -74,7 +75,6 @@ export default function Paint({
   const { confirm, ConfirmNode } = useConfirm();
   const { prompt, PromptNode } = usePrompt();
   const saveTimer = useRef<number | undefined>(undefined);
-  const imageInputRef = useRef<HTMLInputElement>(null);
 
   const fail = (e: any) => toast.error(String(e.message ?? e));
   const warnMissingGlyphs = (missing: string[]) => {
@@ -115,28 +115,7 @@ export default function Paint({
     };
   });
 
-  const tools: { value: Tool; label: string; icon: string }[] = [
-    { value: "select", label: t("paint.tool.select"), icon: "⬚" },
-    { value: "pen", label: t("paint.tool.pen"), icon: "✎" },
-    { value: "erase", label: t("paint.tool.erase"), icon: "⌫" },
-    { value: "eraseLine", label: t("paint.tool.eraseLine"), icon: "✂" },
-    { value: "line", label: t("paint.tool.line"), icon: "╱" },
-    { value: "rect", label: t("paint.tool.rect"), icon: "▭" },
-    { value: "maskRect", label: t("paint.tool.maskRect"), icon: "▰" },
-    { value: "circle", label: t("paint.tool.circle"), icon: "◯" },
-    { value: "semicircle", label: t("paint.tool.semicircle"), icon: "◗" },
-    { value: "text", label: t("paint.tool.text"), icon: "T" },
-    { value: "bucketFill", label: t("paint.tool.bucketFill"), icon: "🪣" },
-    { value: "areaFill", label: t("paint.tool.areaFill"), icon: "▨" },
-    { value: "maskCircle", label: t("paint.tool.maskCircle"), icon: "●" },
-  ];
-  const selectTools = tools.filter((o) => o.value === "select");
-  const drawTools = tools.filter((o) => ["pen", "line", "rect", "circle", "semicircle", "text"].includes(o.value));
-  const fillTools = tools.filter((o) => o.value === "bucketFill" || o.value === "areaFill");
-  const maskTools = tools.filter((o) => o.value === "maskRect" || o.value === "maskCircle");
-  const eraseTools = tools.filter((o) => o.value === "erase" || o.value === "eraseLine");
-  const activeToolMeta = tools.find((o) => o.value === tool);
-  const isFillTool = tool === "bucketFill" || tool === "areaFill";
+  const activeToolMeta = paintTools(t).find((o) => o.value === tool);
 
   // Both fill tools produce a normal closed object with fill.enabled, so the
   // existing style/render/G-code pipeline (withStyledCache → buildStyledPolylines
@@ -573,61 +552,16 @@ export default function Paint({
   };
 
   // Keyboard shortcuts — only active when this tab is visible.
-  useEffect(() => {
-    if (!visible || coloringOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
-      if (e.key === "Escape") {
-        e.preventDefault();
-        setMenu(null);
-        if (tool !== "select") { setTool("select"); return; }
-        if (selectedIds.length > 0) setSelectedIds([]);
-        return;
-      }
-      if (tool === "text" && selectedIds.length === 1 && !(e.ctrlKey || e.metaKey || e.altKey)) {
-        if (e.key === "Backspace") {
-          if (ops.editSelectedText((text) => text.slice(0, -1))) e.preventDefault();
-          return;
-        }
-        if (e.key === "Enter") {
-          if (ops.editSelectedText((text) => `${text}\n`)) e.preventDefault();
-          return;
-        }
-        if (e.key.length === 1) {
-          if (ops.editSelectedText((text) => text === defaultText ? e.key : text + e.key)) e.preventDefault();
-          return;
-        }
-      }
-      const arrow: Record<string, [number, number]> = {
-        ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
-      };
-      if (arrow[e.key] && selectedIds.length > 0 && !(e.ctrlKey || e.metaKey || e.altKey)) {
-        e.preventDefault();
-        if (!e.repeat) ops.remember();
-        const step = page?.grid.step || 1;
-        const [sx, sy] = arrow[e.key];
-        ops.nudgeSelected(sx * step, sy * step);
-        return;
-      }
-      if ((e.key === "Delete" || e.key === "Backspace") && selectedIds.length > 0) {
-        e.preventDefault();
-        ops.deleteSelected();
-        return;
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") { e.preventDefault(); ops.copySelected(); return; }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "x") { e.preventDefault(); ops.cutSelected(); return; }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v") { e.preventDefault(); ops.pasteObjects(); return; }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") { e.preventDefault(); ops.duplicateSelected(); return; }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
-        e.preventDefault();
-        if (e.shiftKey) ops.redo(); else ops.undo();
-        return;
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); ops.redo(); }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+  usePaintShortcuts({
+    active: visible && !coloringOpen,
+    tool,
+    setTool,
+    selectedIds,
+    setSelectedIds,
+    closeMenu: () => setMenu(null),
+    ops,
+    page,
+    defaultText,
   });
 
   if (!cal || !index || !page) return <div className="card">{t("paint.loading")}</div>;
@@ -818,37 +752,7 @@ export default function Paint({
         )}
 
         <div className="paint-workspace">
-          <nav className="paint-tool-rail" aria-label={t("paint.activeTool")}>
-            <div className="rail-group" style={{ flex: selectTools.length }}>
-              <Segmented<Tool> value={tool} onChange={selectTool}
-                options={selectTools.map((o) => ({ value: o.value, label: o.icon, title: o.label }))}
-                className="paint-tool-grid vertical" />
-            </div>
-            <span className="rail-div" />
-            <div className="rail-group" style={{ flex: drawTools.length }}>
-              <Segmented<Tool> value={tool} onChange={selectTool}
-                options={drawTools.map((o) => ({ value: o.value, label: o.icon, title: o.label }))}
-                className="paint-tool-grid vertical" />
-            </div>
-            <span className="rail-div" />
-            <div className="rail-group" style={{ flex: fillTools.length }}>
-              <Segmented<Tool> value={tool} onChange={selectTool}
-                options={fillTools.map((o) => ({ value: o.value, label: o.icon, title: o.label }))}
-                className="paint-tool-grid vertical" />
-            </div>
-            <span className="rail-div" />
-            <div className="rail-group" style={{ flex: maskTools.length }}>
-              <Segmented<Tool> value={tool} onChange={selectTool}
-                options={maskTools.map((o) => ({ value: o.value, label: o.icon, title: o.label }))}
-                className="paint-tool-grid vertical" />
-            </div>
-            <span className="rail-div" />
-            <div className="rail-group" style={{ flex: eraseTools.length }}>
-              <Segmented<Tool> value={tool} onChange={selectTool}
-                options={eraseTools.map((o) => ({ value: o.value, label: o.icon, title: o.label }))}
-                className="paint-tool-grid vertical" />
-            </div>
-          </nav>
+          <PaintToolRail tool={tool} onToolChange={selectTool} />
           <div className="paint-canvas-wrap">
             <PlotScore pageId={page.id} objects={page.objects} />
             {page.objects.length === 0 && (
@@ -882,114 +786,26 @@ export default function Paint({
             />
           </div>
 
-          <aside className="paint-context-panel">
-            <div className="ctx-header">
-              <div className="ctx-active-tool">
-                <span className="muted">{t("paint.activeTool")}</span>
-                <strong>{activeToolMeta ? activeToolMeta.label : ""}</strong>
-              </div>
-              <div className="paint-tools-actions ctx-actions">
-                <button className="ghost" disabled={ops.history.undo === 0} onClick={ops.undo}
-                  title={t("paint.undo")} aria-label={t("paint.undo")}>↶</button>
-                <button className="ghost" disabled={ops.history.redo === 0} onClick={ops.redo}
-                  title={t("paint.redo")} aria-label={t("paint.redo")}>↷</button>
-                <button className="ghost" disabled={!hasSelection} onClick={ops.copySelected}
-                  title={hasSelection ? t("paint.copySelection") : t("paint.noSelection")} aria-label={t("paint.copy")}>⧉</button>
-                <button className="ghost" disabled={!hasSelection} onClick={ops.cutSelected}
-                  title={hasSelection ? t("paint.cutSelection") : t("paint.noSelection")} aria-label={t("paint.cut")}>✂</button>
-                <button className="ghost" disabled={ops.clipboardCount === 0} onClick={() => ops.pasteObjects()}
-                  title={ops.clipboardCount > 0 ? t("paint.pasteSelection") : t("paint.clipboardEmpty")} aria-label={t("paint.paste")}>
-                  ⎘{ops.clipboardCount > 1 ? <span className="act-count">{ops.clipboardCount}</span> : ""}
-                </button>
-                <button className="ghost" disabled={!hasSelection} onClick={ops.duplicateSelected}
-                  title={hasSelection ? t("paint.duplicateSelection") : t("paint.noSelection")} aria-label={t("paint.duplicate")}>⧉</button>
-                <button className="ghost" disabled={selectedObjects.length < 2} onClick={() => ops.groupSelected()}
-                  title={selectedObjects.length >= 2 ? t("paint.groupSelection") : t("paint.needTwoObjects")} aria-label={t("paint.group")}>⊞</button>
-                <button className="ghost" disabled={!selectedObjects.some((obj) => obj.groupId)} onClick={() => ops.ungroupSelected()}
-                  title={selectedObjects.some((obj) => obj.groupId) ? t("paint.ungroupSelection") : t("paint.noGroupSelected")} aria-label={t("paint.ungroup")}>⊟</button>
-              </div>
-              <div className="paint-asset-row">
-                <button className="ghost" title={t("gallery.button")} aria-label={t("gallery.button")}
-                  onClick={() => setGalleryOpen(true)}>▦</button>
-                <button className="ghost" title={t("paint.imageImport")} aria-label={t("paint.imageImport")}
-                  onClick={() => imageInputRef.current?.click()}>🖼</button>
-                <button className="ghost" title={t("paint.md.button")} aria-label={t("paint.md.button")}
-                  onClick={() => setMdOpen(true)}>⌶</button>
-              </div>
-              <input
-                ref={imageInputRef}
-                type="file"
-                accept="image/*"
-                style={{ display: "none" }}
-                onChange={(e) => { pickImage(e.target.files?.[0]); e.target.value = ""; }}
-              />
-            </div>
-
-            <div className="ctx-body" key={tool}>
-              {tool === "select" && (
-                <>
-                  <div className="paint-tool-section">
-                    <h4>{t("paint.section.arrange")}</h4>
-                    <div className="paint-tools-actions compact">
-                      <button className="ghost" disabled={!hasSelection} onClick={ops.fitSelected}
-                        title={hasSelection ? t("paint.fitSelection") : t("paint.noSelection")} aria-label={t("paint.fit")}>⛶</button>
-                      <button className="ghost" disabled={!hasSelection} onClick={ops.centerSelected}
-                        title={hasSelection ? t("paint.centerSelection") : t("paint.noSelection")} aria-label={t("paint.center")}>⌖</button>
-                      <button className="ghost" disabled={!hasSelection} onClick={() => ops.moveSelected(-1)}
-                        title={hasSelection ? t("paint.moveBack") : t("paint.noSelection")} aria-label={t("paint.toBack")}>⤓</button>
-                      <button className="ghost" disabled={!hasSelection} onClick={() => ops.moveSelected(1)}
-                        title={hasSelection ? t("paint.moveFront") : t("paint.noSelection")} aria-label={t("paint.toFront")}>⤒</button>
-                      <button className="ghost" disabled={!hasSelection} onClick={ops.deleteSelected}
-                        title={hasSelection ? t("paint.deleteSelection") : t("paint.noSelection")} aria-label={t("paint.delete")}>
-                        🗑{selectedObjects.length > 1 ? <span className="act-count">{selectedObjects.length}</span> : ""}
-                      </button>
-                      <button className="ghost" disabled={!hasSelection} onClick={ops.convertSelectedToLines}
-                        title={hasSelection ? t("paint.convertToLines") : t("paint.noSelection")} aria-label={t("paint.convertToLines")}>⇄</button>
-                    </div>
-                  </div>
-                  <PaintStylePanel
-                    hasSelection={hasSelection}
-                    selectedObjectSize={selectedObjectSize}
-                    selectedObjectRotation={selectedObjectRotation}
-                    selectedStyle={selectedStyle}
-                    sizeLinked={sizeLinked}
-                    onSizeLinkedToggle={() => setSizeLinked((v) => !v)}
-                    onWidthChange={(v) => ops.setSelectedObjectSize("width", v)}
-                    onHeightChange={(v) => ops.setSelectedObjectSize("height", v)}
-                    onRotationChange={ops.setSelectedObjectRotation}
-                    onStyleChange={ops.updateSelectedStyle}
-                  />
-                </>
-              )}
-
-              {(tool === "erase" || tool === "eraseLine") && (
-                <div className="paint-tool-section">
-                  <h4>{t("paint.section.erase")}</h4>
-                  <Segmented<EraserBrush>
-                    value={eraserBrush}
-                    onChange={setEraserBrush}
-                    options={[
-                      { value: "point", label: t("paint.coloringBrushPoint"), title: t("paint.coloringBrushPoint") },
-                      { value: "small",  label: t("paint.coloringBrushSmall"),  title: t("paint.coloringBrushSize") },
-                      { value: "medium", label: t("paint.coloringBrushMedium"), title: t("paint.coloringBrushSize") },
-                      { value: "large",  label: t("paint.coloringBrushLarge"),  title: t("paint.coloringBrushSize") },
-                    ]}
-                    className="paint-tool-grid"
-                  />
-                  {eraserBrush !== "point" && (
-                    <div className="coloring-brush-hint">⌀ {Math.round(eraserRadius * 2)} mm</div>
-                  )}
-                </div>
-              )}
-
-              {isFillTool && (
-                <div className="paint-tool-section">
-                  <h4>{t("paint.fillOptions")}</h4>
-                  <FillOptions value={fillStyle} onChange={(patch) => setFillStyle((f) => ({ ...f, ...patch }))} />
-                </div>
-              )}
-            </div>
-          </aside>
+          <PaintContextPanel
+            tool={tool}
+            activeToolLabel={activeToolMeta ? activeToolMeta.label : ""}
+            ops={ops}
+            hasSelection={hasSelection}
+            selectedObjects={selectedObjects}
+            selectedObjectSize={selectedObjectSize}
+            selectedObjectRotation={selectedObjectRotation}
+            selectedStyle={selectedStyle}
+            sizeLinked={sizeLinked}
+            onSizeLinkedToggle={() => setSizeLinked((v) => !v)}
+            eraserBrush={eraserBrush}
+            onEraserBrushChange={setEraserBrush}
+            eraserRadius={eraserRadius}
+            fillStyle={fillStyle}
+            onFillStyleChange={(patch) => setFillStyle((f) => ({ ...f, ...patch }))}
+            onOpenGallery={() => setGalleryOpen(true)}
+            onOpenMarkdown={() => setMdOpen(true)}
+            onPickImage={pickImage}
+          />
         </div>
 
         {selectedText && (
