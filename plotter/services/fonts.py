@@ -195,8 +195,9 @@ def delete_font(font_id: str) -> None:
 
 def _clear_renderer_cache() -> None:
     try:
-        from plotter.text.singleline import _glyph_centerline, _load_font
+        from plotter.text.fonts import load_font
+        from plotter.text.skeleton import glyph_centerline
     except ImportError:
         return
-    _load_font.cache_clear()
-    _glyph_centerline.cache_clear()
+    load_font.cache_clear()
+    glyph_centerline.cache_clear()

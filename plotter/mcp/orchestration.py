@@ -228,7 +228,7 @@ def active_profile_and_cal() -> tuple[dict, Any]:
 
 
 def render_text_polylines(args: dict[str, Any]) -> tuple[list[list[list[float]]], dict]:
-    from plotter.text.singleline import text_polylines
+    from plotter.text import text_polylines
 
     from ..services.stroke_fonts import StrokeFontService
 

@@ -14,7 +14,7 @@ from plotter.core.storage import jobs_dir
 from plotter.gcode.metrics import evaluate_gcode
 from plotter.gcode.preview import parse_gcode_3d_text
 from plotter.gcode.scene import page_polylines, save_scene_job, scene_gcode
-from plotter.text.singleline import text_polylines
+from plotter.text import text_polylines
 
 from ...services.profiles import ProfileService, profile_meta
 from ...services.upload_validation import MAX_GCODE_BYTES
