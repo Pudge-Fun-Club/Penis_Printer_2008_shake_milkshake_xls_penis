@@ -3,8 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
-from ...services.profiles import ProfileService
-from ...services.sources import SourceService
+from plotter.web.deps import profile_service, source_service
+
 from .jobs import _job_info
 
 # LEGACY: the Sources store is superseded by the unified gallery (merge plan
@@ -12,10 +12,6 @@ from .jobs import _job_info
 # /api/gallery; only the Place tab still calls these endpoints and they are
 # removed together with Place in stage 7/8. No new callers should be added.
 router = APIRouter(tags=["sources"])
-
-
-def service() -> SourceService:
-    return SourceService()
 
 
 @router.post("/sources")
@@ -30,33 +26,33 @@ def create_source(
     if not file.filename:
         raise HTTPException(400, "Dateiname fehlt")
     data = file.file.read()
-    return service().create(file.filename, data, mode=mode, detail=max(1, min(detail, 3)))
+    return source_service().create(file.filename, data, mode=mode, detail=max(1, min(detail, 3)))
 
 
 @router.get("/sources")
 def list_sources() -> list[dict]:
-    return service().list()
+    return source_service().list()
 
 
 @router.delete("/sources/{source_id}")
 def delete_source(source_id: str) -> dict:
-    service().delete(source_id)
+    source_service().delete(source_id)
     return {"ok": True}
 
 
 @router.get("/sources/thumbnails")
 def source_thumbnails() -> dict:
-    return service().thumbnails()
+    return source_service().thumbnails()
 
 
 @router.get("/sources/{source_id}/preview/{page}")
 def source_preview(source_id: str, page: int, max_points: int = 20000) -> dict:
-    return service().preview(source_id, page, max_points=max(100, min(max_points, 40000)))
+    return source_service().preview(source_id, page, max_points=max(100, min(max_points, 40000)))
 
 
 @router.get("/sources/{source_id}/thumbnail")
 def source_thumbnail(source_id: str) -> dict:
-    return service().thumbnail(source_id)
+    return source_service().thumbnail(source_id)
 
 
 class PlacementRequest(BaseModel):
@@ -68,17 +64,17 @@ class PlacementRequest(BaseModel):
 
 @router.post("/sources/{source_id}/gcode")
 def source_gcode(source_id: str, req: PlacementRequest) -> dict:
-    path = service().generate_gcode(
+    path = source_service().generate_gcode(
         source_id, req.page, x=req.x, y=req.y, width=req.width
     )
-    return _job_info(path, active_profile=ProfileService().active_profile_meta()).model_dump()
+    return _job_info(path, active_profile=profile_service().active_profile_meta()).model_dump()
 
 
 @router.post("/sources/{source_id}/score")
 def source_score(source_id: str, req: PlacementRequest) -> dict:
     """Live plottability rating of a placement (no job file written)."""
     try:
-        result = service().score_placement(
+        result = source_service().score_placement(
             source_id, req.page, x=req.x, y=req.y, width=req.width
         )
     except Exception as exc:  # noqa: BLE001 — surface the reason to the UI

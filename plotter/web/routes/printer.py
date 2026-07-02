@@ -10,10 +10,11 @@ from plotter.core.calibration import Calibration
 from plotter.core.jobmeta import job_profile_status, read_job_meta_checked
 from plotter.core.storage import jobs_dir
 from plotter.gcode.safety import GcodeSafetyChecker, SafetyViolation
+from plotter.web.deps import printer_controller, profile_service
 
 from ...printer.manager import BackendBusyError, BackendUnavailableError
 from ...services import PrinterController
-from ...services.profiles import ProfileService, profile_meta
+from ...services.profiles import profile_meta
 
 log = logging.getLogger(__name__)
 
@@ -21,7 +22,7 @@ router = APIRouter(tags=["printer"])
 
 
 def controller() -> PrinterController:
-    return PrinterController()
+    return printer_controller()
 
 
 @router.get("/printer/status")
@@ -184,7 +185,7 @@ def octo_send(req: PrintRequest) -> dict:
     # Profile guard first: id + fingerprint must match the active profile.
     # Read profile and calibration in one go so a concurrent profile switch
     # cannot pass the guard with one profile and the safety check with another.
-    service = ProfileService()
+    service = profile_service()
     active = service.active()
     profiles = {p["id"]: p for p in service.list(include_archived=True)}
     _require_profile_match(path, profile_meta(active), profiles)

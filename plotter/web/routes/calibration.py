@@ -6,8 +6,7 @@ from pydantic import BaseModel
 
 from plotter.artwork.export import CalibrationImportError, calibration_from_xml, calibration_to_xml
 from plotter.core.calibration import Calibration
-
-from ...services import PrinterController
+from plotter.web.deps import printer_controller
 
 router = APIRouter(tags=["calibration"])
 
@@ -57,4 +56,4 @@ class PenHeightRequest(BaseModel):
 @router.post("/calibration/pen-from-position")
 def pen_from_position(req: PenHeightRequest) -> dict:
     """Store the current head Z as the pen-up or pen-down height."""
-    return PrinterController().pen_height_from_position(req.which).as_dict()
+    return printer_controller().pen_height_from_position(req.which).as_dict()

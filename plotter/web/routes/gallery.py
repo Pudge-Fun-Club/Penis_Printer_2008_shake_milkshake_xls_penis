@@ -9,9 +9,9 @@ from pydantic import BaseModel
 from plotter.artwork.pipeline import PlotterError
 from plotter.core.config import load_settings
 from plotter.gcode.preview import parse_gcode, parse_gcode_3d_text
+from plotter.web.deps import gallery_service
 
 from ...services.errors import ServiceError
-from ...services.gallery import GalleryService
 from ...services.settings_store import load_saved
 from ...services.upload_validation import MAX_STL_BYTES, MAX_UPLOAD_BYTES
 from ..auth import optional_admin, require_admin
@@ -21,10 +21,6 @@ router = APIRouter(tags=["gallery"])
 # All gallery routes require an admin session except POST /gallery (create)
 # and GET /gallery/upload-info, which stay public. POST /gallery checks the
 # upload gate for non-admin requests.
-
-
-def service() -> GalleryService:
-    return GalleryService()
 
 
 @router.get("/gallery/upload-info")
@@ -68,7 +64,7 @@ async def create_submission(
     data = await file.read(MAX_UPLOAD_BYTES + 1)
     uploader = "admin" if session else "public"
     # mode/detail only apply to the admin asset path; public uploads ignore them.
-    return service().create(
+    return gallery_service().create(
         file.filename, data, title=title, uploader=uploader, mode=mode, detail=detail
     )
 
@@ -99,7 +95,9 @@ async def create_stl_asset(
     params_obj, layers_obj = _parse_stl_payload(params, layers)
     data = await file.read(MAX_STL_BYTES + 1)
     try:
-        return service().create_stl(file.filename, data, layers_obj, params_obj, title=title)
+        return gallery_service().create_stl(
+            file.filename, data, layers_obj, params_obj, title=title
+        )
     except ServiceError as exc:
         raise HTTPException(getattr(exc, "status_code", 400), str(exc)) from exc
     except PlotterError as exc:
@@ -112,38 +110,38 @@ def list_submissions(
     uploader: str | None = None,
     _: dict = Depends(require_admin),
 ) -> list[dict]:
-    return service().list(include_archived=include_archived, uploader=uploader)
+    return gallery_service().list(include_archived=include_archived, uploader=uploader)
 
 
 # Declared before the "/gallery/{item_id}" routes so it is not captured as an id.
 @router.get("/gallery/thumbnails")
 def submission_thumbnails(_: dict = Depends(require_admin)) -> dict:
-    return service().svg_thumbnails()
+    return gallery_service().svg_thumbnails()
 
 
 @router.get("/gallery/{item_id}")
 def get_submission(item_id: str, _: dict = Depends(require_admin)) -> dict:
-    return service().get(item_id)
+    return gallery_service().get(item_id)
 
 
 @router.get("/gallery/{item_id}/svg")
 def submission_svg(item_id: str, _: dict = Depends(require_admin)) -> dict:
-    return service().svg_preview(item_id)
+    return gallery_service().svg_preview(item_id)
 
 
 @router.get("/gallery/{item_id}/preview/{page}")
 def submission_page_preview(item_id: str, page: int, _: dict = Depends(require_admin)) -> dict:
-    return service().preview(item_id, page)
+    return gallery_service().preview(item_id, page)
 
 
 @router.get("/gallery/{item_id}/thumbnail")
 def submission_thumbnail(item_id: str, _: dict = Depends(require_admin)) -> dict:
-    return service().thumbnail(item_id)
+    return gallery_service().thumbnail(item_id)
 
 
 @router.get("/gallery/{item_id}/original")
 def submission_original(item_id: str, _: dict = Depends(require_admin)) -> FileResponse:
-    path, info = service().original_path(item_id)
+    path, info = gallery_service().original_path(item_id)
     return FileResponse(
         path,
         media_type=info.get("mime") or "application/octet-stream",
@@ -153,7 +151,7 @@ def submission_original(item_id: str, _: dict = Depends(require_admin)) -> FileR
 
 @router.get("/gallery/{item_id}/gcode/preview")
 def submission_gcode_preview(item_id: str, _: dict = Depends(require_admin)) -> dict:
-    return parse_gcode(service().gcode_path(item_id))
+    return parse_gcode(gallery_service().gcode_path(item_id))
 
 
 @router.get("/gallery/{item_id}/gcode/preview3d")
@@ -162,7 +160,7 @@ def submission_gcode_preview_3d(
     page: int = 1,
     _: dict = Depends(require_admin),
 ) -> dict:
-    return parse_gcode_3d_text(service().gcode_preview_text(item_id, page))
+    return parse_gcode_3d_text(gallery_service().gcode_preview_text(item_id, page))
 
 
 # -- admin actions (to be protected once the admin login exists) ---------------
@@ -180,12 +178,12 @@ class RenderRequest(BaseModel):
 
 @router.patch("/gallery/{item_id}/title")
 def set_submission_title(item_id: str, req: TitleRequest, _: dict = Depends(require_admin)) -> dict:
-    return service().set_title(item_id, req.title)
+    return gallery_service().set_title(item_id, req.title)
 
 
 @router.post("/gallery/{item_id}/render")
 def render_submission(item_id: str, req: RenderRequest, _: dict = Depends(require_admin)) -> dict:
-    return service().rerender(
+    return gallery_service().rerender(
         item_id, mode=req.mode, detail=req.detail, continuous=req.continuous
     )
 
@@ -193,7 +191,7 @@ def render_submission(item_id: str, req: RenderRequest, _: dict = Depends(requir
 @router.get("/gallery/{item_id}/stl-params")
 def stl_params(item_id: str, _: dict = Depends(require_admin)) -> dict:
     try:
-        return service().stl_params(item_id)
+        return gallery_service().stl_params(item_id)
     except ServiceError as exc:
         raise HTTPException(getattr(exc, "status_code", 404), str(exc)) from exc
 
@@ -207,7 +205,7 @@ def update_stl_asset(
 ) -> dict:
     params_obj, layers_obj = _parse_stl_payload(params, layers)
     try:
-        return service().update_stl(item_id, layers_obj, params_obj)
+        return gallery_service().update_stl(item_id, layers_obj, params_obj)
     except ServiceError as exc:
         raise HTTPException(getattr(exc, "status_code", 400), str(exc)) from exc
     except PlotterError as exc:
@@ -216,15 +214,15 @@ def update_stl_asset(
 
 @router.post("/gallery/{item_id}/archive")
 def archive_submission(item_id: str, _: dict = Depends(require_admin)) -> dict:
-    return service().set_status(item_id, "archived")
+    return gallery_service().set_status(item_id, "archived")
 
 
 @router.post("/gallery/{item_id}/unarchive")
 def unarchive_submission(item_id: str, _: dict = Depends(require_admin)) -> dict:
-    return service().set_status(item_id, "active")
+    return gallery_service().set_status(item_id, "active")
 
 
 @router.delete("/gallery/{item_id}")
 def delete_submission(item_id: str, _: dict = Depends(require_admin)) -> dict:
-    service().delete(item_id)
+    gallery_service().delete(item_id)
     return {"ok": True}

@@ -23,8 +23,9 @@ from plotter.core.storage import jobs_dir
 from plotter.gcode.preview import parse_gcode, parse_gcode_3d
 from plotter.gcode.profile import TEST_PATTERNS, test_pattern
 from plotter.gcode.safety import GcodeSafetyChecker, SafetyViolation
+from plotter.web.deps import profile_service
 
-from ...services.profiles import ProfileService, profile_meta
+from ...services.profiles import profile_meta
 
 router = APIRouter(tags=["jobs"])
 
@@ -92,12 +93,12 @@ def _job_path(filename: str) -> Path:
 
 def _active() -> tuple[Calibration, dict]:
     """Active profile's calibration + compact metadata, from one read."""
-    profile = ProfileService().active()
+    profile = profile_service().active()
     return Calibration().merged(profile["calibration"]), profile_meta(profile)
 
 
 def _profiles_by_id() -> dict[str, dict]:
-    return {p["id"]: p for p in ProfileService().list(include_archived=True)}
+    return {p["id"]: p for p in profile_service().list(include_archived=True)}
 
 
 @router.get("/jobs")

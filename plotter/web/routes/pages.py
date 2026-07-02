@@ -8,23 +8,19 @@ from pydantic import BaseModel
 
 from plotter.artwork.pipeline import PlotterError
 from plotter.core.calibration import Calibration
-from plotter.core.document import get_document_store
 from plotter.core.jobmeta import delete_job_meta, read_job_meta
 from plotter.core.storage import jobs_dir
 from plotter.gcode.metrics import evaluate_gcode
 from plotter.gcode.preview import parse_gcode_3d_text
 from plotter.gcode.scene import page_polylines, save_scene_job, scene_gcode
 from plotter.text import text_polylines
+from plotter.web.deps import document_store, profile_service
 
 from ...services.profiles import ProfileService, profile_meta
 from ...services.upload_validation import MAX_GCODE_BYTES
 from .jobs import _job_info
 
 router = APIRouter(tags=["pages"])
-
-
-def store():
-    return get_document_store()
 
 
 def _profiles_by_id(service: ProfileService) -> dict[str, dict]:
@@ -51,7 +47,7 @@ def _page_profile_status(page: dict, active: dict, profiles: dict[str, dict]) ->
 def _index_response(index: dict) -> dict:
     """Enrich a raw store index with per-page profile status + active profile,
     so any index-returning endpoint gives the frontend a complete PageIndex."""
-    service = ProfileService()
+    service = profile_service()
     active = service.active_profile_meta()
     profiles = _profiles_by_id(service)
     return {
@@ -67,15 +63,15 @@ def _index_response(index: dict) -> dict:
 @router.get("/pages")
 def list_pages() -> dict:
     """Ordered page metadata + the active page id + the active profile."""
-    return _index_response(store().list_pages())
+    return _index_response(document_store().list_pages())
 
 
 @router.get("/pages/{page_id}")
 def get_page(page_id: str) -> dict:
-    page = store().get_page(page_id)
+    page = document_store().get_page(page_id)
     if not page:
         raise HTTPException(404, "Seite nicht gefunden")
-    service = ProfileService()
+    service = profile_service()
     active = service.active_profile_meta()
     return {**page, "profileStatus": _page_profile_status(page, active, _profiles_by_id(service))}
 
@@ -109,7 +105,7 @@ def _require_expected_profile(req: ExpectedProfileRequest | None, active: dict) 
 
 @router.post("/pages")
 def create_page(req: CreateRequest) -> dict:
-    return store().create_page(req.name, profile=ProfileService().active_profile_meta())
+    return document_store().create_page(req.name, profile=profile_service().active_profile_meta())
 
 
 class SaveRequest(BaseModel):
@@ -138,27 +134,27 @@ class TextPreviewRequest(BaseModel):
 @router.put("/pages/{page_id}")
 def save_page(page_id: str, req: SaveRequest) -> dict:
     try:
-        return store().save_page(page_id, req.model_dump(exclude_none=True))
+        return document_store().save_page(page_id, req.model_dump(exclude_none=True))
     except KeyError as exc:
         raise HTTPException(404, "Seite nicht gefunden") from exc
 
 
 @router.delete("/pages/{page_id}")
 def delete_page(page_id: str) -> dict:
-    return store().delete_page(page_id)
+    return document_store().delete_page(page_id)
 
 
 @router.post("/pages/{page_id}/duplicate")
 def duplicate_page(page_id: str) -> dict:
     try:
-        return store().duplicate_page(page_id)
+        return document_store().duplicate_page(page_id)
     except KeyError as exc:
         raise HTTPException(404, "Seite nicht gefunden") from exc
 
 
 @router.post("/pages/{page_id}/activate")
 def activate_page(page_id: str) -> dict:
-    return store().set_active(page_id)
+    return document_store().set_active(page_id)
 
 
 class ReorderRequest(BaseModel):
@@ -167,7 +163,7 @@ class ReorderRequest(BaseModel):
 
 @router.post("/pages/reorder")
 def reorder_pages(req: ReorderRequest) -> dict:
-    return store().reorder_pages(req.ids)
+    return document_store().reorder_pages(req.ids)
 
 
 class GroupCreateRequest(BaseModel):
@@ -184,23 +180,23 @@ class PageGroupRequest(BaseModel):
 
 @router.post("/pages/groups")
 def create_group(req: GroupCreateRequest) -> dict:
-    return _index_response(store().create_group(req.name))
+    return _index_response(document_store().create_group(req.name))
 
 
 @router.put("/pages/groups/{group_id}")
 def rename_group(group_id: str, req: GroupRenameRequest) -> dict:
-    return _index_response(store().rename_group(group_id, req.name))
+    return _index_response(document_store().rename_group(group_id, req.name))
 
 
 @router.delete("/pages/groups/{group_id}")
 def delete_group(group_id: str) -> dict:
-    return _index_response(store().delete_group(group_id))
+    return _index_response(document_store().delete_group(group_id))
 
 
 @router.post("/pages/{page_id}/group")
 def set_page_group(page_id: str, req: PageGroupRequest) -> dict:
     try:
-        return _index_response(store().set_page_group(page_id, req.groupId))
+        return _index_response(document_store().set_page_group(page_id, req.groupId))
     except KeyError as exc:
         raise HTTPException(404, "Seite nicht gefunden") from exc
 
@@ -222,7 +218,7 @@ def _require_active_page_profile(
     position; the user has to activate or adopt the profile explicitly. Returns
     ``(active_meta, profile, calibration)`` or raises the matching 409.
     """
-    service = ProfileService()
+    service = profile_service()
     profile = service.active()
     active = profile_meta(profile)
     _require_expected_profile(req, active)
@@ -264,7 +260,7 @@ def _require_active_page_profile(
 
 @router.post("/pages/{page_id}/gcode")
 def page_gcode(page_id: str, req: PageGcodeRequest | None = None) -> dict:
-    page = store().get_page(page_id)
+    page = document_store().get_page(page_id)
     if not page:
         raise HTTPException(404, "Seite nicht gefunden")
     active, _profile, cal = _require_active_page_profile(page, req)
@@ -319,7 +315,7 @@ def page_color_gcode(page_id: str, req: PageColorGcodeRequest) -> dict:
     duplicates in the job list. Masks are not applied — coloring works on raw
     object polylines (see docs/planing/coloring).
     """
-    page = store().get_page(page_id)
+    page = document_store().get_page(page_id)
     if not page:
         raise HTTPException(404, "Seite nicht gefunden")
     if not _GROUP_ID_RE.match(req.color_group_id):
@@ -407,10 +403,10 @@ def adopt_profile(page_id: str, req: AdoptRequest) -> dict:
     content is never scaled or moved; if it does not fit the active plot
     area, adoption is refused unless forced.
     """
-    page = store().get_page(page_id)
+    page = document_store().get_page(page_id)
     if not page:
         raise HTTPException(404, "Seite nicht gefunden")
-    profile = ProfileService().active()
+    profile = profile_service().active()
     active = profile_meta(profile)
     _require_expected_profile(req, active)
     if not req.force:
@@ -427,13 +423,13 @@ def adopt_profile(page_id: str, req: AdoptRequest) -> dict:
                 f"hinaus ({cal.plot_width:g} × {cal.plot_height:g} mm). "
                 "Inhalte werden nicht automatisch skaliert.",
             )
-    updated = store().set_page_profile(page_id, active)
+    updated = document_store().set_page_profile(page_id, active)
     return {
         **updated,
         "profileStatus": _page_profile_status(
             updated,
             active,
-            _profiles_by_id(ProfileService()),
+            _profiles_by_id(profile_service()),
         ),
     }
 
@@ -445,7 +441,7 @@ class SceneRequest(BaseModel):
 
 
 def _page_for_preview(page_id: str, objects: list | None) -> dict:
-    page = store().get_page(page_id)
+    page = document_store().get_page(page_id)
     if not page:
         raise HTTPException(404, "Seite nicht gefunden")
     return {**page, "objects": objects} if objects is not None else page
