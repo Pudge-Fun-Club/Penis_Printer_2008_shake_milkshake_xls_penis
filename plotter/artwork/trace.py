@@ -7,6 +7,7 @@ import numpy as np
 
 from plotter.artwork.drawing import Drawing
 from plotter.artwork.pipeline import PlotterError, ensure_command, run_command
+from plotter.geometry.smoothing import chaikin
 
 TRACE_DPI = 200.0  # rasterisation resolution for PDFs — keeps text legible
 IMAGE_DPI = 96.0  # assumed resolution of plain raster images
@@ -170,22 +171,6 @@ _CENTERLINE_DETAIL = {1: (1.5, 6.0, 1), 2: (1.0, 3.0, 2), 3: (0.6, 2.0, 2)}
 _NEIGHBOURS = ((-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1))
 
 
-def _chaikin(points: np.ndarray, iterations: int) -> np.ndarray:
-    """Chaikin corner-cutting: round a polyline by replacing each segment with
-    its 1/4 and 3/4 points. Endpoints stay fixed so open strokes keep their
-    start/end. Curves stay within the original hull (no overshoot)."""
-    pts = points
-    for _ in range(iterations):
-        if len(pts) < 3:
-            break
-        a, b = pts[:-1], pts[1:]
-        cut = np.empty((2 * len(a), 2), dtype=pts.dtype)
-        cut[0::2] = 0.75 * a + 0.25 * b
-        cut[1::2] = 0.25 * a + 0.75 * b
-        pts = np.vstack((pts[0], cut, pts[-1]))
-    return pts
-
-
 def _skeleton_to_polylines(sk: np.ndarray) -> list[list[tuple[int, int]]]:
     """Walk a skeleton bitmap into polylines of (x, y) pixels.
 
@@ -284,7 +269,7 @@ def _centerline_paths(
         approx = cv2.approxPolyDP(arr.reshape(-1, 1, 2), eps_px, False).reshape(-1, 2)
         if len(approx) < 2:
             continue
-        smoothed = _chaikin(approx.astype(np.float64), smooth_iters)
+        smoothed = chaikin(approx.astype(np.float64), smooth_iters)
         paths.append(smoothed * coord2mm)
 
     if not paths:

@@ -1,23 +1,16 @@
 from __future__ import annotations
 
 import json
-import os
 import time
 from pathlib import Path
 
+from plotter.core.jsonstore import atomic_write_json
 from plotter.services.profiles import ProfileService
 
 
 def job_meta_path(gcode_path: Path) -> Path:
     """Sidecar JSON next to the job: ``foo.gcode`` -> ``foo.json``."""
     return gcode_path.with_suffix(".json")
-
-
-def _atomic_write_json(path: Path, payload: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + f".tmp-{os.getpid()}")
-    tmp.write_text(json.dumps(payload, indent=2))
-    tmp.replace(path)
 
 
 def write_job_meta(
@@ -32,7 +25,7 @@ def write_job_meta(
         "source": source or {"kind": "unknown"},
         "profile": profile or ProfileService().active_profile_meta(),
     }
-    _atomic_write_json(job_meta_path(gcode_path), meta)
+    atomic_write_json(job_meta_path(gcode_path), meta)
     return meta
 
 
@@ -72,7 +65,7 @@ def rename_job_meta(src: Path, dst: Path) -> None:
         src_meta.rename(dst_meta)
         return
     meta["filename"] = dst.name
-    _atomic_write_json(dst_meta, meta)
+    atomic_write_json(dst_meta, meta)
     src_meta.unlink(missing_ok=True)
 
 

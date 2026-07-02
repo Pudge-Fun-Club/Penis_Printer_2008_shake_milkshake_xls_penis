@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import threading
-import time
 import uuid
 
 from plotter.core.events import hub
+from plotter.core.jsonstore import new_id, now
 from plotter.core.state import StateStore, create_store
 
 
@@ -16,14 +16,6 @@ def _emit(action: str, *, page_id: str | None = None, mcp: bool = False) -> None
 # Default grid: five granularity levels in mm (coarse -> fine).
 GRID_STEPS = [50, 25, 10, 5, 1]
 DEFAULT_GRID = {"step": 10, "snap": False}
-
-
-def _now() -> float:
-    return time.time()
-
-
-def _new_id() -> str:
-    return "p-" + uuid.uuid4().hex[:6]
 
 
 def _page_thumbnail(page: dict) -> dict | None:
@@ -126,15 +118,15 @@ class DocumentStore:
         profile: dict | None = None,
         mcp: dict | None = None,
     ) -> dict:
-        page_id = _new_id()
-        now = _now()
+        page_id = new_id("p-", 6)
+        ts = now()
         page = {
             "id": page_id,
             "name": name or page_id,
             "objects": [],
             "grid": dict(DEFAULT_GRID),
-            "created": now,
-            "modified": now,
+            "created": ts,
+            "modified": ts,
         }
         if profile:
             page["profileId"] = profile.get("id")
@@ -168,7 +160,7 @@ class DocumentStore:
             page["profileId"] = profile.get("id")
             page["profileName"] = profile.get("name")
             page["profileFingerprint"] = profile.get("fingerprint")
-            page["modified"] = _now()
+            page["modified"] = now()
             self._store.set(self._page_key(page_id), page)
             self._refresh_meta(page)
             _emit("save", page_id=page_id)
@@ -183,7 +175,7 @@ class DocumentStore:
             for field in ("objects", "grid", "name", "markdown", "coloring", "continuous"):
                 if field in updates and updates[field] is not None:
                     page[field] = updates[field]
-            page["modified"] = _now()
+            page["modified"] = now()
             self._store.set(self._page_key(page_id), page)
             self._refresh_meta(page)
             _emit("save", page_id=page_id)
@@ -227,7 +219,7 @@ class DocumentStore:
             copy["grid"] = src.get("grid", dict(DEFAULT_GRID))
             if src.get("markdown"):
                 copy["markdown"] = src["markdown"]
-            copy["modified"] = _now()
+            copy["modified"] = now()
             self._store.set(self._page_key(copy["id"]), copy)
             self._refresh_meta(copy)
             _emit("save", page_id=copy["id"])

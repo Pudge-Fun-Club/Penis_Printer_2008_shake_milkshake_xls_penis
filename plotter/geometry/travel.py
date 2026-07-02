@@ -15,21 +15,18 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Sequence
-from typing import TypeVar
 
 import numpy as np
 
 Point = tuple[float, float]
 Polyline = list[Point]
 
-L = TypeVar("L")
-
 _LARGE_THRESHOLD = 4000
 _TWO_OPT_MAX = 600  # 2-opt is O(passes·n²); cap n to keep it snappy
 _TWO_OPT_PASSES = 6
 
 
-def _greedy(
+def _greedy[L](
     polylines: Sequence[L],
     end_xy: Callable[[L, int], Point],
     reverse: Callable[[L], L],
@@ -57,7 +54,7 @@ def _greedy(
     return ordered
 
 
-def _greedy_large(
+def _greedy_large[L](
     polylines: Sequence[L],
     end_xy: Callable[[L, int], Point],
     reverse: Callable[[L], L],

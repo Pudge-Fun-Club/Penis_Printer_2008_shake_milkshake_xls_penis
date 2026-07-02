@@ -2,15 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import shutil
 import threading
-import time
-import uuid
 from dataclasses import fields
 from pathlib import Path
 
 from plotter.core.calibration import Calibration, data_dir
+from plotter.core.jsonstore import atomic_write_json, new_id, now
 
 from .errors import ServiceError
 
@@ -76,20 +74,6 @@ def calibration_fingerprint(cal: Calibration | dict) -> str:
     return "sha256:" + hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
-def _atomic_write(path: Path, payload: dict) -> None:
-    tmp = path.with_name(path.name + f".tmp-{os.getpid()}")
-    tmp.write_text(json.dumps(payload, indent=2))
-    tmp.replace(path)
-
-
-def _new_id() -> str:
-    return "prof-" + uuid.uuid4().hex[:8]
-
-
-def _now() -> float:
-    return time.time()
-
-
 class ProfileService:
     """File-based store for calibration profiles under ``<data>/profiles/``.
 
@@ -119,7 +103,7 @@ class ProfileService:
 
     def _write(self, profile: dict) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
-        _atomic_write(self._profile_path(profile["id"]), profile)
+        atomic_write_json(self._profile_path(profile["id"]), profile)
 
     def _profile_ids(self) -> list[str]:
         if not self.root.exists():
@@ -133,7 +117,7 @@ class ProfileService:
     def _write_mirror(self, cal_data: dict) -> None:
         # Direct JSON write — *not* Calibration.save(), which would call back
         # into this module to sync the active profile.
-        _atomic_write(data_dir() / "calibration.json", cal_data)
+        atomic_write_json(data_dir() / "calibration.json", cal_data)
 
     # -- migration -----------------------------------------------------------
 
@@ -161,7 +145,7 @@ class ProfileService:
 
     def _set_active_id(self, profile_id: str, mirror: dict | None = None) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
-        _atomic_write(self.root / self.ACTIVE_FILE, {"active_id": profile_id})
+        atomic_write_json(self.root / self.ACTIVE_FILE, {"active_id": profile_id})
         if mirror is not None:
             self._write_mirror(mirror)
 
@@ -226,7 +210,7 @@ class ProfileService:
                 return
             profile["calibration"] = data
             profile["fingerprint"] = calibration_fingerprint(data)
-            profile["modified"] = _now()
+            profile["modified"] = now()
             self._write(profile)
 
     # -- queries ---------------------------------------------------------------
@@ -282,13 +266,13 @@ class ProfileService:
     def _build(self, name: str, cal_data: dict, profile_id: str | None = None) -> dict:
         known = {f.name for f in fields(Calibration)}
         clean = Calibration().merged({k: v for k, v in cal_data.items() if k in known})
-        now = _now()
+        ts = now()
         data = clean.as_dict()
         return {
-            "id": profile_id or _new_id(),
+            "id": profile_id or new_id("prof-", 8),
             "name": name,
-            "created": now,
-            "modified": now,
+            "created": ts,
+            "modified": ts,
             "archived": False,
             "fingerprint": calibration_fingerprint(data),
             "calibration": data,
@@ -335,7 +319,7 @@ class ProfileService:
                 )
                 profile["calibration"] = merged.as_dict()
                 profile["fingerprint"] = calibration_fingerprint(profile["calibration"])
-            profile["modified"] = _now()
+            profile["modified"] = now()
             self._write(profile)
             if profile["id"] == self.active_id():
                 self._write_mirror(profile["calibration"])
@@ -360,7 +344,7 @@ class ProfileService:
                     "anderes aktivieren."
                 )
             profile["archived"] = True
-            profile["modified"] = _now()
+            profile["modified"] = now()
             self._write(profile)
             return self._full(profile)
 
@@ -369,7 +353,7 @@ class ProfileService:
             self.ensure_migrated()
             profile = self._require(profile_id)
             profile["archived"] = False
-            profile["modified"] = _now()
+            profile["modified"] = now()
             self._write(profile)
             return self._full(profile)
 

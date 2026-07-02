@@ -5,7 +5,6 @@ import json
 import os
 import secrets
 import threading
-import time
 from pathlib import Path
 
 import pyotp
@@ -13,6 +12,7 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 
 from plotter.core.calibration import data_dir
+from plotter.core.jsonstore import atomic_write_json, now
 from plotter.core.state import create_store
 
 from .errors import ServiceError
@@ -33,17 +33,6 @@ class AuthNotConfigured(ServiceError):
 _lock = threading.RLock()
 _hasher = PasswordHasher()
 _store = None
-
-
-def _atomic_write(path: Path, payload: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + f".tmp-{os.getpid()}")
-    tmp.write_text(json.dumps(payload, indent=2))
-    tmp.replace(path)
-
-
-def _now() -> float:
-    return time.time()
 
 
 def _state():
@@ -102,8 +91,8 @@ class AuthService:
             "username": username,
             "password_hash": _hasher.hash(password),
             "totp_secret": secret,
-            "created": _now(),
-            "expires": _now() + self.SETUP_TTL_SECONDS,
+            "created": now(),
+            "expires": now() + self.SETUP_TTL_SECONDS,
         }
         _state().set(_key("setup", setup_id), payload)
         return {
@@ -116,7 +105,7 @@ class AuthService:
         if self.configured():
             raise AuthConflict("Admin ist bereits eingerichtet.")
         pending = _state().get(_key("setup", setup_id)) if setup_id else None
-        if not pending or pending.get("expires", 0) < _now():
+        if not pending or pending.get("expires", 0) < now():
             raise AuthError("Setup ist abgelaufen. Bitte neu starten.")
         if not self._verify_totp(pending["totp_secret"], code):
             raise AuthError("TOTP-Code ist ungültig.")
@@ -126,13 +115,13 @@ class AuthService:
             "password_hash": pending["password_hash"],
             "totp_secret": pending["totp_secret"],
             "recovery_code_hashes": [_recovery_hash(code) for code in recovery_codes],
-            "created": _now(),
-            "modified": _now(),
+            "created": now(),
+            "modified": now(),
         }
         with _lock:
             if self.configured():
                 raise AuthConflict("Admin ist bereits eingerichtet.")
-            _atomic_write(self.path, admin)
+            atomic_write_json(self.path, admin)
         token, expires = self.create_session(admin["username"])
         return {"token": token, "expires": expires, "recoveryCodes": recovery_codes}
 
@@ -162,7 +151,7 @@ class AuthService:
     def create_session(self, username: str) -> tuple[str, float]:
         token = secrets.token_urlsafe(32)
         ttl = session_ttl_seconds()
-        expires = _now() + ttl
+        expires = now() + ttl
         _state().set(_key("session", token), {"username": username, "expires": expires})
         return token, expires
 
@@ -170,7 +159,7 @@ class AuthService:
         if not token or not self.configured():
             return None
         session = _state().get(_key("session", token))
-        if not session or session.get("expires", 0) < _now():
+        if not session or session.get("expires", 0) < now():
             return None
         admin = self._read_admin()
         if not admin or session.get("username") != admin.get("username"):
@@ -197,8 +186,8 @@ class AuthService:
         return data if isinstance(data, dict) else None
 
     def _write_admin(self, admin: dict) -> None:
-        admin["modified"] = _now()
-        _atomic_write(self.path, admin)
+        admin["modified"] = now()
+        atomic_write_json(self.path, admin)
 
     def _totp_uri(self, username: str, secret: str) -> str:
         return pyotp.TOTP(secret).provisioning_uri(name=username, issuer_name="GCodeScribe")

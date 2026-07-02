@@ -88,10 +88,10 @@ class TestCenterline:
             centerline_image_to_svg(png, workspace / "blank.svg", dpi=100)
 
     def test_chaikin_rounds_corners_keeping_endpoints(self):
-        from plotter.artwork.trace import _chaikin
+        from plotter.geometry.smoothing import chaikin
 
         corner = np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 10.0]])  # sharp 90° turn
-        smooth = _chaikin(corner, 2)
+        smooth = chaikin(corner, 2)
         # endpoints preserved
         assert np.allclose(smooth[0], corner[0])
         assert np.allclose(smooth[-1], corner[-1])

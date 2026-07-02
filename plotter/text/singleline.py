@@ -27,6 +27,7 @@ from skimage.draw import polygon
 from skimage.morphology import skeletonize
 
 from plotter.artwork.pipeline import PlotterError
+from plotter.geometry.smoothing import chaikin
 
 Point = tuple[float, float]
 Polyline = list[Point]
@@ -256,19 +257,6 @@ def _recording_to_contours(recording: list[tuple[str, tuple]]) -> list[Polyline]
     return contours
 
 
-def _chaikin(points: np.ndarray, iterations: int) -> np.ndarray:
-    pts = points
-    for _ in range(iterations):
-        if len(pts) < 3:
-            break
-        a, b = pts[:-1], pts[1:]
-        cut = np.empty((2 * len(a), 2), dtype=pts.dtype)
-        cut[0::2] = 0.75 * a + 0.25 * b
-        cut[1::2] = 0.25 * a + 0.75 * b
-        pts = np.vstack((pts[0], cut, pts[-1]))
-    return pts
-
-
 def _skeleton_to_strokes(
     mask: np.ndarray, min_pixels: int = _SKELETON_MIN_PIXELS
 ) -> list[list[tuple[int, int]]]:
@@ -339,7 +327,7 @@ def _smooth_skeleton_line(line: list[tuple[int, int]]) -> np.ndarray:
     approx = cv2.approxPolyDP(arr.reshape(-1, 1, 2), _CENTERLINE_SIMPLIFY_PX, False).reshape(-1, 2)
     if len(approx) < 2:
         approx = arr
-    return _chaikin(approx.astype(np.float64), _CENTERLINE_SMOOTH_ITERS)
+    return chaikin(approx.astype(np.float64), _CENTERLINE_SMOOTH_ITERS)
 
 
 @lru_cache(maxsize=2048)
