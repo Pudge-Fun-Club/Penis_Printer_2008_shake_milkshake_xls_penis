@@ -291,8 +291,10 @@ class TestGalleryService:
         assert "score" in meta
 
     def test_normalize_backfills_pages_for_legacy_meta(self):
+        from plotter.services.gallery.records import normalize
+
         meta = {"id": "x", "kind": "svg", "width": 10, "height": 5, "lines": 3}
-        GalleryService._normalize(meta)
+        normalize(meta)
         assert meta["uploader"] == "public"
         assert meta["pages"] == [
             {"n": 1, "file": "image.svg", "width": 10, "height": 5, "lines": 3}
