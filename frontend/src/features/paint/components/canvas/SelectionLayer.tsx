@@ -1,0 +1,190 @@
+import type { SceneObject } from "../../../../api";
+import { bounds, IDENTITY, type Pt } from "../../lib/geometry";
+import {
+  resizeLocals,
+  screenVectorToRotatedLocal,
+  worldPoint,
+  type ResizeEdge,
+} from "../../lib/viewTransform";
+
+// Resize handle descriptors for single-selection.
+const RESIZE_HANDLES: { edge: ResizeEdge; cursor: string }[] = [
+  { edge: "tl", cursor: "nwse-resize" },
+  { edge: "tc", cursor: "ns-resize" },
+  { edge: "tr", cursor: "nesw-resize" },
+  { edge: "ml", cursor: "ew-resize" },
+  { edge: "mr", cursor: "ew-resize" },
+  { edge: "bl", cursor: "nesw-resize" },
+  { edge: "bc", cursor: "ns-resize" },
+  { edge: "br", cursor: "nwse-resize" },
+];
+
+/** Hit areas, selection outlines and the move/resize/rotate handles for
+ * single objects plus the outline/scale/rotate handles of a multi-selection.
+ * All gesture state lives in PaintCanvas — this layer only starts gestures. */
+export default function SelectionLayer({
+  objects,
+  selectedIds,
+  selectedObjects,
+  selectedBounds,
+  stroke,
+  handleSize,
+  objectSelectionIds,
+  onSelect,
+  onContextMenuSelection,
+  onStartMove,
+  onStartResize,
+  onStartRotate,
+  onStartGroupRotate,
+  onStartGroupScale,
+}: {
+  objects: SceneObject[];
+  selectedIds: string[];
+  selectedObjects: SceneObject[];
+  selectedBounds: [number, number, number, number] | null;
+  stroke: number;
+  handleSize: number;
+  objectSelectionIds: (obj: SceneObject) => string[];
+  onSelect: (ids: string[]) => void;
+  onContextMenuSelection: (ids: string[], x: number, y: number) => void;
+  onStartMove: (e: React.PointerEvent, obj: SceneObject) => void;
+  onStartResize: (e: React.PointerEvent, obj: SceneObject, edge: ResizeEdge) => void;
+  onStartRotate: (e: React.PointerEvent, obj: SceneObject, center: Pt) => void;
+  onStartGroupRotate: (e: React.PointerEvent, ids: string[], center: Pt) => void;
+  onStartGroupScale: (e: React.PointerEvent, ids: string[], center: Pt) => void;
+}) {
+  const STROKE = stroke;
+  const HANDLE = handleSize;
+  return (
+    <>
+      {objects.map((obj) => {
+        const t = obj.transform ?? IDENTITY;
+        const localLines = (obj.cachedPolylines ?? []) as Pt[][];
+        const localBounds = bounds(localLines.flat());
+        const [lx0, ly0, lx1, ly1] = localBounds;
+        const boxCorners = [
+          worldPoint([lx0, ly0], t),
+          worldPoint([lx1, ly0], t),
+          worldPoint([lx1, ly1], t),
+          worldPoint([lx0, ly1], t),
+        ];
+        const bx0 = Math.min(...boxCorners.map((p) => p[0]));
+        const by0 = Math.min(...boxCorners.map((p) => p[1]));
+        const bx1 = Math.max(...boxCorners.map((p) => p[0]));
+        const by1 = Math.max(...boxCorners.map((p) => p[1]));
+        const m = STROKE * 2;
+        const sel = selectedIds.includes(obj.id);
+        const singleSel = selectedIds.length === 1 && sel;
+        const cx = t.x;
+        const cy = t.y;
+        const bw = bx1 - bx0;
+        const bh = by1 - by0;
+        const topMid: Pt = [(boxCorners[0][0] + boxCorners[1][0]) / 2, (boxCorners[0][1] + boxCorners[1][1]) / 2];
+        const rotateOffset = screenVectorToRotatedLocal([0, -HANDLE * 1.2], -t.rotation);
+        const rotateHandle: Pt = [topMid[0] + rotateOffset[0], topMid[1] + rotateOffset[1]];
+        const outline = boxCorners.map((p) => p.join(",")).join(" ");
+        return (
+          <g key={`s${obj.id}`}>
+            {/* hit + selection outline */}
+            <rect
+              x={bx0 - m} y={by0 - m} width={bw + 2 * m} height={bh + 2 * m}
+              fill="transparent"
+              style={{ cursor: "move" }}
+              onPointerDown={(e) => {
+                if (e.button === 2) {
+                  e.stopPropagation();
+                  const targetIds = objectSelectionIds(obj);
+                  const ids = selectedIds.includes(obj.id) ? selectedIds : targetIds;
+                  if (!selectedIds.includes(obj.id)) onSelect(ids);
+                  onContextMenuSelection(ids, e.clientX, e.clientY);
+                  return;
+                }
+                onStartMove(e, obj);
+              }}
+              onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
+            />
+            <polygon
+              points={outline}
+              fill="none"
+              stroke={sel ? "var(--accent)" : "transparent"}
+              strokeWidth={STROKE}
+              strokeDasharray={`${STROKE * 2} ${STROKE}`}
+              pointerEvents="none"
+            />
+            {singleSel && (
+              <>
+                {/* rotate tether + handle */}
+                <line x1={topMid[0]} y1={topMid[1]} x2={rotateHandle[0]} y2={rotateHandle[1]}
+                  stroke="var(--accent)" strokeWidth={STROKE} strokeDasharray={`${STROKE} ${STROKE}`}
+                  pointerEvents="none" />
+                <circle
+                  cx={rotateHandle[0]} cy={rotateHandle[1]} r={HANDLE / 2}
+                  fill="var(--panel)" stroke="var(--accent)" strokeWidth={STROKE}
+                  style={{ cursor: "grab" }}
+                  onPointerDown={(e) => onStartRotate(e, obj, [cx, cy])}
+                />
+                {/* 8 resize handles */}
+                {RESIZE_HANDLES.map(({ edge, cursor }) => {
+                  const { handle } = resizeLocals(edge, localBounds);
+                  const [hx, hy] = worldPoint(handle, t);
+                  const hs = HANDLE * 0.85;
+                  return (
+                    <rect
+                      key={edge}
+                      x={hx - hs / 2} y={hy - hs / 2}
+                      width={hs} height={hs}
+                      rx={hs * 0.18}
+                      fill="var(--accent)" stroke="#fff" strokeWidth={STROKE / 2}
+                      style={{ cursor }}
+                      onPointerDown={(e) => onStartResize(e, obj, edge)}
+                    />
+                  );
+                })}
+              </>
+            )}
+          </g>
+        );
+      })}
+
+      {/* group selection outline + rotate + scale handles */}
+      {selectedBounds && (() => {
+        const [bx0, by0, bx1, by1] = selectedBounds;
+        const m = STROKE * 3;
+        const cx = (bx0 + bx1) / 2;
+        const cy = (by0 + by1) / 2;
+        const rotHandleX = cx;
+        const rotHandleY = by0 - m - HANDLE * 1.5;
+        return (
+          <g>
+            <rect
+              x={bx0 - m} y={by0 - m} width={bx1 - bx0 + 2 * m} height={by1 - by0 + 2 * m}
+              fill="none" stroke="var(--accent)" strokeWidth={STROKE * 1.2}
+              strokeDasharray={`${STROKE * 3} ${STROKE * 1.5}`}
+              pointerEvents="none"
+            />
+            <line
+              x1={cx} y1={by0 - m} x2={rotHandleX} y2={rotHandleY}
+              stroke="var(--accent)" strokeWidth={STROKE}
+              strokeDasharray={`${STROKE} ${STROKE}`}
+              pointerEvents="none"
+            />
+            <circle
+              cx={rotHandleX} cy={rotHandleY} r={HANDLE / 2}
+              fill="var(--panel)" stroke="var(--accent)" strokeWidth={STROKE}
+              style={{ cursor: "grab" }}
+              onPointerDown={(e) => onStartGroupRotate(e, selectedObjects.map((obj) => obj.id), [cx, cy])}
+            />
+            <rect
+              x={bx1 + m - HANDLE * 0.425} y={by1 + m - HANDLE * 0.425}
+              width={HANDLE * 0.85} height={HANDLE * 0.85}
+              rx={HANDLE * 0.15}
+              fill="var(--accent)" stroke="#fff" strokeWidth={STROKE / 2}
+              style={{ cursor: "nwse-resize" }}
+              onPointerDown={(e) => onStartGroupScale(e, selectedObjects.map((obj) => obj.id), [cx, cy])}
+            />
+          </g>
+        );
+      })()}
+    </>
+  );
+}
