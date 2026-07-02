@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api, type GalleryMetrics, type GalleryScore, type PageScore, type SceneObject } from "../api";
-import { fmtBytes, fmtDuration } from "../format";
+import { fmtBytes, fmtDuration } from "../lib/format";
 import { useI18n } from "../i18n";
 import { scoreClass } from "./ScoreBadge";
 

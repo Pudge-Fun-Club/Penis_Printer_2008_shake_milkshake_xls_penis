@@ -1,8 +1,8 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
-import LiveViewer from "./stream/LiveViewer";
-import Upload from "./components/Upload";
+import LiveViewer from "./features/stream/components/LiveViewer";
+import Upload from "./features/upload/Upload";
 import { ToastProvider } from "./components/Toasts";
 import { I18nProvider } from "./i18n";
 import "./styles.css";

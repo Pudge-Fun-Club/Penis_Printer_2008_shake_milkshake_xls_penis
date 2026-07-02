@@ -8,7 +8,7 @@ import {
   type EdgeModel,
   type Mesh,
   type UpAxis,
-} from "../stl";
+} from "../features/stl/lib";
 
 /**
  * Interactive shaded 3D view of an STL with the control model of the G-code 3D
