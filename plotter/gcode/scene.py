@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import math
 import time
 from pathlib import Path
-
-import numpy as np
 
 from plotter.artwork.export import calibration_comment
 from plotter.artwork.pipeline import PlotterError
@@ -24,6 +21,7 @@ from plotter.geometry.primitives import (
     transform_point,
 )
 from plotter.geometry.routing import route_travel
+from plotter.geometry.travel import sort_for_travel_points
 
 
 def page_polylines(page: dict) -> list[Polyline]:
@@ -111,69 +109,6 @@ def _obs_to_local_polygon(obs: dict, cal: Calibration) -> Polygon:
         ly0 = oy - cal.origin_y
         ly1 = oy + oh - cal.origin_y
     return [(lx0, ly0), (lx1, ly0), (lx1, ly1), (lx0, ly1)]
-
-
-def _sorted_for_travel(polylines: list[Polyline]) -> list[Polyline]:
-    if len(polylines) > 4000:
-        return _sorted_for_travel_large(polylines)
-    remaining = list(polylines)
-    ordered: list[Polyline] = []
-    cursor: Point = (0.0, 0.0)
-    while remaining:
-        best_i, best_rev, best_d = 0, False, float("inf")
-        for i, line in enumerate(remaining):
-            d_start = math.hypot(line[0][0] - cursor[0], line[0][1] - cursor[1])
-            d_end = math.hypot(line[-1][0] - cursor[0], line[-1][1] - cursor[1])
-            if d_start < best_d:
-                best_i, best_rev, best_d = i, False, d_start
-            if d_end < best_d:
-                best_i, best_rev, best_d = i, True, d_end
-        line = remaining.pop(best_i)
-        if best_rev:
-            line = list(reversed(line))
-        ordered.append(line)
-        cursor = line[-1]
-    return ordered
-
-
-def _sorted_for_travel_large(polylines: list[Polyline]) -> list[Polyline]:
-    """KD-tree greedy nearest-neighbour ordering for large stroke counts, so even
-    big non-continuous pages keep their (invisible) pen-up travel short."""
-    from scipy.spatial import cKDTree
-
-    n = len(polylines)
-    pts = np.empty((2 * n, 2))
-    for i, line in enumerate(polylines):
-        pts[2 * i] = line[0]
-        pts[2 * i + 1] = line[-1]
-    tree = cKDTree(pts)
-    used = bytearray(n)
-    ordered: list[Polyline] = []
-    cursor = np.array([0.0, 0.0])
-    for _ in range(n):
-        found = -1
-        kk = 8
-        while found < 0:
-            kk = min(2 * n, kk)
-            _, idx = tree.query(cursor, k=kk)
-            for ix in np.atleast_1d(idx):
-                if not used[ix // 2]:
-                    found = int(ix)
-                    break
-            if found < 0:
-                if kk >= 2 * n:
-                    break
-                kk *= 2
-        if found < 0:
-            break
-        pi = found // 2
-        used[pi] = 1
-        line = polylines[pi]
-        if found % 2 == 1:
-            line = list(reversed(line))
-        ordered.append(line)
-        cursor = np.array([line[-1][0], line[-1][1]])
-    return ordered
 
 
 FeedLine = tuple[Polyline, list[float]]
@@ -314,7 +249,7 @@ def scene_gcode(page: dict, cal: Calibration) -> str:
         lines.append(pen_up)
         cursor = printer(poly[-1])
 
-    for poly in _sorted_for_travel(polylines):
+    for poly in sort_for_travel_points(polylines):
         emit(poly, None)
     # Feed lines keep capture order (natural left-to-right writing order).
     for poly, feeds in feed_lines:
