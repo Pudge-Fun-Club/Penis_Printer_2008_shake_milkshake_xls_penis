@@ -1,3 +1,4 @@
+import NumberField from "../../../components/NumberField";
 import { type StrokeMode, type VectorStyle } from "../lib/styling";
 import { useI18n } from "../../../i18n";
 import { FillOptions } from "./FillOptions";
@@ -40,22 +41,15 @@ export function PaintStylePanel({
     <div className="paint-style-panel">
       <h4>{t("paint.object")}</h4>
       <div className="paint-size-fields">
-        <label className="field">
-          {t("common.width")}
-          <div className="input-unit">
-            <input
-              type="number"
-              min={0.1}
-              step={0.5}
-              disabled={!selectedObjectSize || selectedObjectSize.localWidth <= 0}
-              value={selectedObjectSize ? Number(selectedObjectSize.width.toFixed(1)) : ""}
-              onChange={(e) => {
-                if (e.target.value !== "") onWidthChange(Number(e.target.value));
-              }}
-            />
-            <em>mm</em>
-          </div>
-        </label>
+        <NumberField
+          label={t("common.width")}
+          unit="mm"
+          min={0.1}
+          step={0.5}
+          disabled={!selectedObjectSize || selectedObjectSize.localWidth <= 0}
+          value={selectedObjectSize ? Number(selectedObjectSize.width.toFixed(1)) : ""}
+          onChange={onWidthChange}
+        />
         <button
           type="button"
           className={`size-link ${sizeLinked ? "active" : ""}`}
@@ -79,39 +73,25 @@ export function PaintStylePanel({
             {!sizeLinked && <line className="size-link-cut" x1="3" y1="3" x2="21" y2="21" />}
           </svg>
         </button>
-        <label className="field">
-          {t("common.height")}
-          <div className="input-unit">
-            <input
-              type="number"
-              min={0.1}
-              step={0.5}
-              disabled={!selectedObjectSize || selectedObjectSize.localHeight <= 0}
-              value={selectedObjectSize ? Number(selectedObjectSize.height.toFixed(1)) : ""}
-              onChange={(e) => {
-                if (e.target.value !== "") onHeightChange(Number(e.target.value));
-              }}
-            />
-            <em>mm</em>
-          </div>
-        </label>
-        <label className="field">
-          {t("common.rotation")}
-          <div className="input-unit">
-            <input
-              type="number"
-              min={0}
-              max={360}
-              step={1}
-              disabled={selectedObjectRotation == null}
-              value={selectedObjectRotation == null ? "" : Number(selectedObjectRotation.toFixed(1))}
-              onChange={(e) => {
-                if (e.target.value !== "") onRotationChange(Number(e.target.value));
-              }}
-            />
-            <em>°</em>
-          </div>
-        </label>
+        <NumberField
+          label={t("common.height")}
+          unit="mm"
+          min={0.1}
+          step={0.5}
+          disabled={!selectedObjectSize || selectedObjectSize.localHeight <= 0}
+          value={selectedObjectSize ? Number(selectedObjectSize.height.toFixed(1)) : ""}
+          onChange={onHeightChange}
+        />
+        <NumberField
+          label={t("common.rotation")}
+          unit="°"
+          min={0}
+          max={360}
+          step={1}
+          disabled={selectedObjectRotation == null}
+          value={selectedObjectRotation == null ? "" : Number(selectedObjectRotation.toFixed(1))}
+          onChange={onRotationChange}
+        />
       </div>
 
       <h4>{t("paint.style.line")}</h4>
