@@ -1,3 +1,10 @@
+"""The serial worker thread: owns the port, streams job lines, tracks state.
+
+A single process-wide worker exists at most once (see the singleton helpers at
+the bottom); it is only created when the serial backend becomes active, so
+status polls never reset the printer by opening the port.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -5,79 +12,29 @@ import os
 import threading
 import time
 from collections import deque
-from collections.abc import Callable
 from pathlib import Path
-from typing import Protocol
 
-from .base import PrinterError
+from plotter.printer.base import PrinterError
+from plotter.printer.serial.transport import (
+    ACK_TIMEOUT,
+    BANNER_QUIET,
+    BANNER_TIMEOUT,
+    DEFAULT_BAUD,
+    DEFAULT_PORT,
+    IDLE,
+    LOADED,
+    PAUSED,
+    PRINTING,
+    RECONNECT_DELAY,
+    STATE_LABELS,
+    Command,
+    SerialTransport,
+    TransportFactory,
+    default_transport,
+    prepare_lines,
+)
 
 log = logging.getLogger(__name__)
-
-DEFAULT_PORT = "/dev/ttyUSB0"
-DEFAULT_BAUD = 115200
-
-# How long to wait for an "ok" before giving up on a line. Generous because a
-# long G1 move only gets its "ok" once Marlin's planner buffer has room.
-ACK_TIMEOUT = 30.0
-# Cap the wait for the boot banner; many boards reset on connect (DTR) and emit
-# "start" within a few seconds, but some are silent — fall back after a quiet gap.
-BANNER_TIMEOUT = 12.0
-BANNER_QUIET = 1.5
-# Backoff between reconnect attempts so a missing printer doesn't spin the CPU.
-RECONNECT_DELAY = 3.0
-
-# Job states.
-IDLE = "idle"
-LOADED = "loaded"
-PRINTING = "printing"
-PAUSED = "paused"
-
-_STATE_LABELS = {
-    IDLE: "Operational",
-    LOADED: "Operational",
-    PRINTING: "Printing",
-    PAUSED: "Paused",
-}
-
-
-class SerialTransport(Protocol):
-    """Minimal subset of ``serial.Serial`` the worker relies on (injectable)."""
-
-    is_open: bool
-
-    def write(self, data: bytes) -> int | None: ...
-    def readline(self) -> bytes: ...
-    def reset_input_buffer(self) -> None: ...
-    def close(self) -> None: ...
-
-
-TransportFactory = Callable[[str, int], SerialTransport]
-
-
-def _default_transport(port: str, baud: int) -> SerialTransport:
-    import serial  # lazy: only needed when serial mode is actually used
-
-    return serial.Serial(port=port, baudrate=baud, timeout=1.0, write_timeout=10.0)
-
-
-def _prepare_lines(text: str) -> list[str]:
-    """Strip comments/blank lines so only real G-code is streamed."""
-    out: list[str] = []
-    for raw in text.splitlines():
-        line = raw.split(";", 1)[0].strip()
-        if line:
-            out.append(line)
-    return out
-
-
-class _Command:
-    """An immediate (non-print) command, run by the worker between job lines."""
-
-    def __init__(self, lines: list[str]):
-        self.lines = lines
-        self.done = threading.Event()
-        self.error: Exception | None = None
-
 
 class SerialWorker:
     """Owns the serial port on a single background thread.
@@ -95,11 +52,11 @@ class SerialWorker:
     ):
         self.port = port
         self.baud = baud
-        self._transport_factory = transport_factory or _default_transport
+        self._transport_factory = transport_factory or default_transport
 
         self._lock = threading.Lock()
         self._wake = threading.Event()
-        self._queue: deque[_Command] = deque()
+        self._queue: deque[Command] = deque()
 
         self._transport: SerialTransport | None = None
         self._online = False
@@ -140,14 +97,14 @@ class SerialWorker:
                 total = len(self._job_lines)
                 completion = round(self._job_index / total * 100, 1) if total else None
                 job = {
-                    "state": _STATE_LABELS[self._state],
+                    "state": STATE_LABELS[self._state],
                     "progress": {"completion": completion},
                     "job": {"file": {"name": self._job_name}},
                 }
             return {"configured": True, "backend": "serial", "online": True, "job": job}
 
     def upload(self, gcode_path: Path, *, start: bool = False) -> dict:
-        lines = _prepare_lines(gcode_path.read_text())
+        lines = prepare_lines(gcode_path.read_text())
         with self._lock:
             self._job_lines = lines
             self._job_name = gcode_path.name
@@ -224,7 +181,7 @@ class SerialWorker:
             resume_xy = self._resume_xy
             self._resume_xy = None
             if resume_xy is not None:
-                self._queue.append(_Command(self._return_from_pause_lines(*resume_xy)))
+                self._queue.append(Command(self._return_from_pause_lines(*resume_xy)))
             self._state = PRINTING
         self._wake.set()
 
@@ -277,7 +234,7 @@ class SerialWorker:
     # -- command submission ------------------------------------------------
 
     def _submit(self, lines: list[str], *, wait: bool) -> None:
-        cmd = _Command(lines)
+        cmd = Command(lines)
         with self._lock:
             self._queue.append(cmd)
         self._wake.set()
@@ -325,21 +282,21 @@ class SerialWorker:
             self._wake.wait(0.1)
             self._wake.clear()
 
-    def _take_command(self) -> _Command | None:
+    def _take_command(self) -> Command | None:
         with self._lock:
             if self._queue:
                 return self._queue.popleft()
         return None
 
-    def _take_pause_park_command(self) -> _Command | None:
+    def _take_pause_park_command(self) -> Command | None:
         with self._lock:
             if self._state != PAUSED or not self._park_requested:
                 return None
             self._park_requested = False
             self._resume_xy = (self._x, self._y)
-        return _Command(self._park_lines())
+        return Command(self._park_lines())
 
-    def _take_pending_resume_command(self) -> _Command | None:
+    def _take_pending_resume_command(self) -> Command | None:
         with self._lock:
             if self._state != PAUSED or not self._resume_requested:
                 return None
@@ -349,7 +306,7 @@ class SerialWorker:
             self._state = PRINTING
         if resume_xy is None:
             return None
-        return _Command(self._return_from_pause_lines(*resume_xy))
+        return Command(self._return_from_pause_lines(*resume_xy))
 
     def _take_job_line(self) -> tuple[int, int, str] | None:
         with self._lock:
@@ -377,7 +334,7 @@ class SerialWorker:
             if self._job_generation == generation and self._job_index == index:
                 self._job_index += 1
 
-    def _run_command(self, cmd: _Command) -> None:
+    def _run_command(self, cmd: Command) -> None:
         try:
             for line in cmd.lines:
                 self._send_line(line)
@@ -400,7 +357,7 @@ class SerialWorker:
         """Resolve ``auto`` to a detected printer port (re-checked each connect)."""
         if self.port.strip().lower() != "auto":
             return self.port
-        from .discovery import resolve_auto_port
+        from plotter.printer.discovery import resolve_auto_port
 
         resolved = resolve_auto_port()
         if not resolved:
