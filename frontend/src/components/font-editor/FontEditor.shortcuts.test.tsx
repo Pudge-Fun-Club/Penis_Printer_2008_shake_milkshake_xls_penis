@@ -177,7 +177,7 @@ describe("FontEditor keyboard shortcuts", () => {
   it("opens a writing test that includes the unsaved active glyph", () => {
     renderEditor();
 
-    fireEvent.change(screen.getByLabelText(/key/i), { target: { value: "a" } });
+    fireEvent.change(screen.getByLabelText(/key/i, { selector: "input" }), { target: { value: "a" } });
     fireEvent.click(screen.getByRole("button", { name: /writing test/i }));
 
     const preview = screen.getByRole("img", { name: /writing test preview/i });
@@ -216,7 +216,7 @@ describe("FontEditor keyboard shortcuts", () => {
   it("autosaves the font when saving a glyph advance", async () => {
     renderEditor();
 
-    fireEvent.change(screen.getByLabelText(/key/i), { target: { value: "a" } });
+    fireEvent.change(screen.getByLabelText(/key/i, { selector: "input" }), { target: { value: "a" } });
     fireEvent.change(screen.getByLabelText(/spacing after/i), { target: { value: "420" } });
     fireEvent.click(screen.getByRole("button", { name: /save glyph/i }));
 
@@ -228,7 +228,7 @@ describe("FontEditor keyboard shortcuts", () => {
   it("saves the spacing before a glyph", async () => {
     renderEditor();
 
-    fireEvent.change(screen.getByLabelText(/key/i), { target: { value: "a" } });
+    fireEvent.change(screen.getByLabelText(/key/i, { selector: "input" }), { target: { value: "a" } });
     fireEvent.change(screen.getByLabelText(/spacing before/i), { target: { value: "-80" } });
     fireEvent.click(screen.getByRole("button", { name: /save glyph/i }));
 
