@@ -13,15 +13,26 @@ Polygon = list[Point]
 EPS = 1e-9
 
 
+def _num(value, default: float = 0.0) -> float:
+    """Coerce a transform field to float, tolerating a missing or null value so a
+    single malformed object can never crash scoring/G-code for the whole page."""
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def transform_point(point: list | tuple, transform: dict) -> Point:
-    scale = float(transform.get("scale", 1.0))
-    x = float(point[0]) * float(transform.get("scaleX") or scale)
-    y = float(point[1]) * float(transform.get("scaleY") or scale)
-    rot = float(transform.get("rotation", 0.0))
+    scale = _num(transform.get("scale"), 1.0)
+    x = _num(point[0]) * _num(transform.get("scaleX") or scale, scale)
+    y = _num(point[1]) * _num(transform.get("scaleY") or scale, scale)
+    rot = _num(transform.get("rotation"))
     cos_r, sin_r = math.cos(rot), math.sin(rot)
     return (
-        float(transform.get("x", 0.0)) + x * cos_r - y * sin_r,
-        float(transform.get("y", 0.0)) + x * sin_r + y * cos_r,
+        _num(transform.get("x")) + x * cos_r - y * sin_r,
+        _num(transform.get("y")) + x * sin_r + y * cos_r,
     )
 
 

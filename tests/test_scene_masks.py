@@ -34,3 +34,18 @@ def test_mask_rect_does_not_remove_lines_above_it():
     lines = page_polylines({"objects": [_mask(0), _line(1)]})
 
     assert lines == [[(-10.0, 5.0), (30.0, 5.0)]]
+
+
+def test_null_transform_coords_do_not_crash():
+    # A malformed object (e.g. a fill whose NaN center serialised to null) must
+    # not take down page_polylines / scoring for the whole page.
+    obj = {
+        "id": "broken",
+        "type": "fill",
+        "zOrder": 0,
+        "transform": {"x": None, "y": None, "rotation": None, "scale": None},
+        "cachedPolylines": [[[0, 0], [10, 0], [10, 10]]],
+    }
+    lines = page_polylines({"objects": [obj]})
+    # Treated as x=y=0, rotation=0, scale=1 → geometry passes through unchanged.
+    assert lines == [[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0)]]
