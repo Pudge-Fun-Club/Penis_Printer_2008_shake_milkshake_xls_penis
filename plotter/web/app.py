@@ -7,8 +7,9 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from plotter.artwork.pipeline import PlotterError
+
 from ..mcp import server as mcp_server
-from ..pipeline import PlotterError
 from ..printer import PrinterError, get_printer_client, use_serial
 from ..services import ServiceError
 from .auth import require_admin

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from plotter.linemerge import merge_polylines
+from plotter.geometry.linemerge import merge_polylines
 
 
 def _as_tuples(line):

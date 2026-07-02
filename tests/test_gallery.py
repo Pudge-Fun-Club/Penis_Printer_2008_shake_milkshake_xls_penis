@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 import pytest
 
-from plotter.gallery_metrics import analyze_gcode, evaluate_gcode, metrics_dict, score_metrics
+from plotter.gcode.metrics import analyze_gcode, evaluate_gcode, metrics_dict, score_metrics
 from plotter.services.gallery import GalleryService
 from plotter.services.profiles import ProfileService
 from plotter.services.upload_validation import (

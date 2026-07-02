@@ -6,9 +6,10 @@ import time
 import uuid
 from pathlib import Path
 
-from ..calibration import Calibration, data_dir
-from ..drawing import load_svg_drawing, placed_gcode
-from ..storage import jobs_dir
+from plotter.artwork.drawing import load_svg_drawing, placed_gcode
+from plotter.core.calibration import Calibration, data_dir
+from plotter.core.storage import jobs_dir
+
 from .asset_pages import THUMB_POINTS, VALID_MODES, build_pages, preview_for, thumbnail_for
 from .errors import ServiceError
 
@@ -110,7 +111,8 @@ class SourceService:
         self, source_id: str, page: int, *, x: float, y: float, width: float
     ) -> Path:
         meta = self.get(source_id)
-        from ..jobmeta import profile_comment, write_job_meta
+        from plotter.core.jobmeta import profile_comment, write_job_meta
+
         from .profiles import ProfileService, profile_meta
 
         profile = ProfileService().active()
@@ -134,7 +136,8 @@ class SourceService:
     ) -> dict:
         """Rate a placement the same way the gallery rates submissions, by
         generating its G-code in memory (no job file written)."""
-        from ..gallery_metrics import evaluate_gcode
+        from plotter.gcode.metrics import evaluate_gcode
+
         from .profiles import ProfileService
         from .upload_validation import MAX_GCODE_BYTES
 

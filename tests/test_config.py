@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from plotter.config import load_settings, load_settings_with_sources
+from plotter.core.config import load_settings, load_settings_with_sources
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from plotter.calibration import Calibration
-from plotter.scene import scene_gcode
+from plotter.core.calibration import Calibration
+from plotter.gcode.scene import scene_gcode
 
 
 def _plus_object() -> dict:

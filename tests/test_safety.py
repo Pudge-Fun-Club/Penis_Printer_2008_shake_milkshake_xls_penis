@@ -4,9 +4,9 @@ import re
 
 import pytest
 
-from plotter.gcode_profile import TEST_PATTERNS
-from plotter.gcode_profile import test_pattern as make_pattern
-from plotter.safety import GcodeSafetyChecker, SafetyViolation
+from plotter.gcode.profile import TEST_PATTERNS
+from plotter.gcode.profile import test_pattern as make_pattern
+from plotter.gcode.safety import GcodeSafetyChecker, SafetyViolation
 
 _MOVE = re.compile(r"^G([01])\b", re.IGNORECASE)
 _WORD = re.compile(r"([XYZ])(-?\d+(?:\.\d+)?)")

@@ -10,13 +10,13 @@ from xml.etree.ElementTree import ParseError
 import numpy as np
 import vpype
 
-from .calibration import Calibration
-from .export import calibration_comment
-from .linemerge import merge_polylines
-from .oneline import continuous_path
-from .pipeline import PlotterError
-from .routing import route_travel
-from .safety import GcodeSafetyChecker
+from plotter.artwork.export import calibration_comment
+from plotter.artwork.pipeline import PlotterError
+from plotter.core.calibration import Calibration
+from plotter.gcode.safety import GcodeSafetyChecker
+from plotter.geometry.linemerge import merge_polylines
+from plotter.geometry.oneline import continuous_path
+from plotter.geometry.routing import route_travel
 
 PX_TO_MM = 25.4 / 96.0  # vpype works in CSS pixels
 
@@ -244,7 +244,7 @@ def placed_gcode(
     the calibrated pen heights.
 
     With ``continuous=True`` the whole drawing is collapsed into a single
-    pen-down stroke (see :func:`plotter.oneline.continuous_path`) so the pen
+    pen-down stroke (see :func:`plotter.geometry.oneline.continuous_path`) so the pen
     never lifts between the first and last point.
     """
     if drawing.is_empty():

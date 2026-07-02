@@ -5,7 +5,8 @@ import secrets
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from ...config import load_settings_with_sources
+from plotter.core.config import load_settings_with_sources
+
 from ...services.settings_store import clear_field, load_saved, patch_saved
 
 router = APIRouter(tags=["settings"])

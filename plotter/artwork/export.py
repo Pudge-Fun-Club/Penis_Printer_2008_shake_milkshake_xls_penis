@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from xml.etree.ElementTree import Element, ParseError, SubElement, fromstring, indent, tostring
 
-from .calibration import Calibration
-from .services.errors import ServiceError
+from plotter.core.calibration import Calibration
+from plotter.services.errors import ServiceError
 
 
 class CalibrationImportError(ServiceError):

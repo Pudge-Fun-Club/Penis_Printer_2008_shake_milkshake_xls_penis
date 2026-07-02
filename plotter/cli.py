@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .pipeline import PlotterError, process_file
+from plotter.artwork.pipeline import PlotterError, process_file
 
 
 def build_parser() -> argparse.ArgumentParser:

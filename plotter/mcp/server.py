@@ -13,8 +13,9 @@ from xml.sax.saxutils import escape
 from fastapi import APIRouter, Header, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
-from ..config import load_settings
-from ..events import hub
+from plotter.core.config import load_settings
+from plotter.core.events import hub
+
 from ..services.settings_store import load_saved
 
 JSONRPC_VERSION = "2.0"
@@ -736,7 +737,8 @@ def _require_printer_ready() -> dict:
 
 
 def _plot_existing_page(page: dict, profile: dict, cal) -> dict:
-    from ..scene import save_scene_job
+    from plotter.gcode.scene import save_scene_job
+
     from ..services.profiles import profile_meta
 
     active = profile_meta(profile)
@@ -764,7 +766,7 @@ def _plot_existing_page(page: dict, profile: dict, cal) -> dict:
         ctrl.home()
         upload = ctrl.client.upload(path, start=True)
     except Exception:
-        from ..jobmeta import delete_job_meta
+        from plotter.core.jobmeta import delete_job_meta
 
         path.unlink(missing_ok=True)
         delete_job_meta(path)
@@ -778,9 +780,10 @@ def _plot_existing_page(page: dict, profile: dict, cal) -> dict:
 
 
 def _create_page_job_and_plot(name: str, objects: list[dict], profile: dict, cal) -> dict:
-    from ..document import get_document_store
-    from ..jobmeta import delete_job_meta
-    from ..scene import save_scene_job
+    from plotter.core.document import get_document_store
+    from plotter.core.jobmeta import delete_job_meta
+    from plotter.gcode.scene import save_scene_job
+
     from ..services.profiles import profile_meta
 
     ready = _require_printer_ready()
@@ -812,7 +815,7 @@ def _create_page_job_and_plot(name: str, objects: list[dict], profile: dict, cal
 
 
 def _update_page_and_plot(page: dict, obj: dict, profile: dict, cal) -> dict:
-    from ..document import get_document_store
+    from plotter.core.document import get_document_store
 
     store = get_document_store()
     original_objects = page.get("objects") or []
@@ -830,7 +833,8 @@ def _update_page_and_plot(page: dict, obj: dict, profile: dict, cal) -> dict:
 
 
 def _active_profile_and_cal() -> tuple[dict, Any]:
-    from ..calibration import Calibration
+    from plotter.core.calibration import Calibration
+
     from ..services.profiles import ProfileService
 
     profile = ProfileService().active()
@@ -838,8 +842,9 @@ def _active_profile_and_cal() -> tuple[dict, Any]:
 
 
 def _render_text_polylines(args: dict[str, Any]) -> tuple[list[list[list[float]]], dict]:
+    from plotter.text.singleline import text_polylines
+
     from ..services.stroke_fonts import StrokeFontService
-    from ..singleline import text_polylines
 
     text = _require_arg(args, "text")
     font = _require_arg(args, "font")
@@ -1091,13 +1096,13 @@ def _tool_list_profiles(_: dict[str, Any]) -> list[dict]:
 
 
 def _tool_list_pages(_: dict[str, Any]) -> dict:
-    from ..document import get_document_store
+    from plotter.core.document import get_document_store
 
     return get_document_store().list_pages()
 
 
 def _tool_list_mcp_pages(_: dict[str, Any]) -> dict:
-    from ..document import get_document_store
+    from plotter.core.document import get_document_store
 
     index = get_document_store().list_pages()
     return {
@@ -1107,7 +1112,8 @@ def _tool_list_mcp_pages(_: dict[str, Any]) -> dict:
 
 
 def _tool_get_page(args: dict[str, Any]) -> dict:
-    from ..document import get_document_store
+    from plotter.core.document import get_document_store
+
     from ..services.errors import ServiceError
 
     page_id = _require_arg(args, "page_id")
@@ -1118,7 +1124,8 @@ def _tool_get_page(args: dict[str, Any]) -> dict:
 
 
 def _tool_delete_mcp_page(args: dict[str, Any]) -> dict:
-    from ..document import get_document_store
+    from plotter.core.document import get_document_store
+
     from ..services.errors import ServiceError
 
     page_id = _require_arg(args, "page_id")
@@ -1139,9 +1146,10 @@ def _tool_delete_mcp_page(args: dict[str, Any]) -> dict:
 
 
 def _tool_get_page_svg(args: dict[str, Any]) -> dict:
-    from ..calibration import Calibration
-    from ..document import get_document_store
-    from ..scene import page_polylines
+    from plotter.core.calibration import Calibration
+    from plotter.core.document import get_document_store
+    from plotter.gcode.scene import page_polylines
+
     from ..services.errors import ServiceError
     from ..services.profiles import ProfileService
 
@@ -1225,8 +1233,8 @@ def _tool_list_jobs(_: dict[str, Any]) -> list[dict]:
 
 
 def _tool_get_job_preview(args: dict[str, Any]) -> dict:
-    from ..gcode_preview import parse_gcode
-    from ..storage import jobs_dir
+    from plotter.core.storage import jobs_dir
+    from plotter.gcode.preview import parse_gcode
 
     filename = Path(_require_arg(args, "filename")).name
     path = jobs_dir() / filename
@@ -1250,8 +1258,9 @@ def _tool_get_job_preview(args: dict[str, Any]) -> dict:
 
 
 def _tool_plot_page(args: dict[str, Any]) -> dict:
-    from ..calibration import Calibration
-    from ..document import get_document_store
+    from plotter.core.calibration import Calibration
+    from plotter.core.document import get_document_store
+
     from ..services.errors import ServiceError
     from ..services.profiles import ProfileService
 
@@ -1266,7 +1275,7 @@ def _tool_plot_page(args: dict[str, Any]) -> dict:
 
 
 def page_polylines_checked(page: dict, cal) -> list[list[list[float]]]:
-    from ..scene import page_polylines
+    from plotter.gcode.scene import page_polylines
 
     polylines = page_polylines(page)
     if not polylines:
@@ -1284,7 +1293,8 @@ def _tool_create_page_and_plot_polylines(args: dict[str, Any]) -> dict:
 
 
 def _tool_add_polylines_to_page_and_plot(args: dict[str, Any]) -> dict:
-    from ..document import get_document_store
+    from plotter.core.document import get_document_store
+
     from ..services.errors import ServiceError
 
     profile, cal = _active_profile_and_cal()
@@ -1306,7 +1316,8 @@ def _tool_create_page_and_plot_drawing(args: dict[str, Any]) -> dict:
 
 
 def _tool_add_drawing_to_page_and_plot(args: dict[str, Any]) -> dict:
-    from ..document import get_document_store
+    from plotter.core.document import get_document_store
+
     from ..services.errors import ServiceError
 
     profile, cal = _active_profile_and_cal()
@@ -1329,7 +1340,8 @@ def _tool_create_page_and_plot_text(args: dict[str, Any]) -> dict:
 
 
 def _tool_add_text_to_page_and_plot(args: dict[str, Any]) -> dict:
-    from ..document import get_document_store
+    from plotter.core.document import get_document_store
+
     from ..services.errors import ServiceError
 
     profile, cal = _active_profile_and_cal()
@@ -1352,7 +1364,8 @@ def _tool_create_page_and_plot_gallery_item(args: dict[str, Any]) -> dict:
 
 
 def _tool_add_gallery_item_to_page_and_plot(args: dict[str, Any]) -> dict:
-    from ..document import get_document_store
+    from plotter.core.document import get_document_store
+
     from ..services.errors import ServiceError
 
     profile, cal = _active_profile_and_cal()

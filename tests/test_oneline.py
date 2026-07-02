@@ -11,9 +11,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from plotter.calibration import Calibration
-from plotter.drawing import Drawing, placed_gcode
-from plotter.oneline import continuous_path
+from plotter.artwork.drawing import Drawing, placed_gcode
+from plotter.core.calibration import Calibration
+from plotter.geometry.oneline import continuous_path
 
 
 def _seg(*pts: tuple[float, float]) -> np.ndarray:

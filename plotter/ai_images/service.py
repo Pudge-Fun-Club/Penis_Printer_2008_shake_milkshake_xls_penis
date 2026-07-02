@@ -4,7 +4,8 @@ import json
 import time
 import uuid
 
-from ..pipeline import PlotterError
+from plotter.artwork.pipeline import PlotterError
+
 from ..services.errors import ServiceError
 from ..services.gallery import GalleryService
 from ..services.upload_validation import UnsupportedUpload, UploadTooLarge

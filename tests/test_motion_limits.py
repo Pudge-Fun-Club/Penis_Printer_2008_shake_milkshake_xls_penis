@@ -4,10 +4,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from plotter.octoprint import OctoPrintClient
-from plotter.position import PositionTracker
+from plotter.core.position import PositionTracker
+from plotter.core.state import FileStateStore
+from plotter.printer.octoprint import OctoPrintClient
 from plotter.services import NotHomedError, PrinterController
-from plotter.state import FileStateStore
 
 
 @pytest.fixture
@@ -96,7 +96,7 @@ class TestHomeSafety:
 
 class TestCalibrationDefaults:
     def test_new_machine_fields_have_backward_compatible_defaults(self, workspace):
-        from plotter.calibration import Calibration
+        from plotter.core.calibration import Calibration
 
         (workspace / "calibration.json").write_text('{"bed_width": 220}')
         cal = Calibration.load()
@@ -120,7 +120,7 @@ class TestPenHeights:
         assert updated.pen_up_z == pytest.approx(updated.pen_down_z + 5.0)
 
     def test_capturing_pen_down_marks_calibrated_and_persists(self, controller, workspace):
-        from plotter.calibration import Calibration
+        from plotter.core.calibration import Calibration
 
         assert not Calibration.load().pen_calibrated
         controller.home()
@@ -145,8 +145,8 @@ class TestSendRevalidation:
 
         from fastapi.testclient import TestClient
 
-        import plotter.octoprint as op
-        from plotter.jobmeta import write_job_meta
+        import plotter.printer.octoprint as op
+        from plotter.core.jobmeta import write_job_meta
 
         jobs = workspace / "jobs"
         jobs.mkdir()
@@ -189,8 +189,8 @@ class TestSendRevalidation:
 
         from fastapi.testclient import TestClient
 
-        import plotter.octoprint as op
-        from plotter.jobmeta import write_job_meta
+        import plotter.printer.octoprint as op
+        from plotter.core.jobmeta import write_job_meta
 
         jobs = workspace / "jobs"
         jobs.mkdir()
@@ -219,7 +219,7 @@ class TestSendRevalidation:
 
         from fastapi.testclient import TestClient
 
-        import plotter.octoprint as op
+        import plotter.printer.octoprint as op
 
         events = []
         with (
@@ -254,8 +254,8 @@ class TestSendRevalidation:
 
         from fastapi.testclient import TestClient
 
-        import plotter.octoprint as op
-        from plotter.jobmeta import write_job_meta
+        import plotter.printer.octoprint as op
+        from plotter.core.jobmeta import write_job_meta
 
         jobs = workspace / "jobs"
         jobs.mkdir()
@@ -281,8 +281,8 @@ class TestSendRevalidation:
 
         from fastapi.testclient import TestClient
 
-        import plotter.octoprint as op
-        from plotter.jobmeta import write_job_meta
+        import plotter.printer.octoprint as op
+        from plotter.core.jobmeta import write_job_meta
 
         jobs = workspace / "jobs"
         jobs.mkdir(exist_ok=True)

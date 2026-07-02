@@ -4,11 +4,11 @@ import cv2
 import numpy as np
 import pytest
 
-from plotter.drawing import load_svg_drawing, placed_gcode
-from plotter.gcode_preview import parse_gcode
-from plotter.safety import SafetyViolation
+from plotter.artwork.drawing import load_svg_drawing, placed_gcode
+from plotter.artwork.trace import centerline_image_to_svg, trace_image_to_svg
+from plotter.gcode.preview import parse_gcode
+from plotter.gcode.safety import SafetyViolation
 from plotter.services.sources import SourceService
-from plotter.trace import centerline_image_to_svg, trace_image_to_svg
 
 SVG = """<?xml version="1.0"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="50mm"
@@ -44,7 +44,7 @@ class TestTrace:
         img = np.full((100, 100), 255, np.uint8)
         png = workspace / "blank.png"
         cv2.imwrite(str(png), img)
-        from plotter.pipeline import PlotterError
+        from plotter.artwork.pipeline import PlotterError
 
         with pytest.raises(PlotterError, match="Keine Konturen"):
             trace_image_to_svg(png, workspace / "blank.svg", dpi=100)
@@ -80,7 +80,7 @@ class TestCenterline:
         assert max(abs(line[0] - line[-1]) for line in drawing.polylines) > 50
 
     def test_blank_image_rejected(self, workspace):
-        from plotter.pipeline import PlotterError
+        from plotter.artwork.pipeline import PlotterError
 
         png = workspace / "blank.png"
         cv2.imwrite(str(png), np.full((100, 100), 255, np.uint8))
@@ -88,7 +88,7 @@ class TestCenterline:
             centerline_image_to_svg(png, workspace / "blank.svg", dpi=100)
 
     def test_chaikin_rounds_corners_keeping_endpoints(self):
-        from plotter.trace import _chaikin
+        from plotter.artwork.trace import _chaikin
 
         corner = np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 10.0]])  # sharp 90° turn
         smooth = _chaikin(corner, 2)

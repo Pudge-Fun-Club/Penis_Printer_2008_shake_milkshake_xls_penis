@@ -5,8 +5,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from .drawing import Drawing
-from .pipeline import PlotterError, ensure_command, run_command
+from plotter.artwork.drawing import Drawing
+from plotter.artwork.pipeline import PlotterError, ensure_command, run_command
 
 TRACE_DPI = 200.0  # rasterisation resolution for PDFs — keeps text legible
 IMAGE_DPI = 96.0  # assumed resolution of plain raster images

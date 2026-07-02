@@ -26,12 +26,12 @@ from fontTools.ttLib import TTFont
 from skimage.draw import polygon
 from skimage.morphology import skeletonize
 
-from .pipeline import PlotterError
+from plotter.artwork.pipeline import PlotterError
 
 Point = tuple[float, float]
 Polyline = list[Point]
 
-_FONT_DIR = Path(__file__).parent / "fonts"
+_FONT_DIR = Path(__file__).resolve().parent.parent / "fonts"
 
 
 @dataclass(frozen=True)
@@ -129,7 +129,7 @@ _USER_PLOTTER_HUMANIZE = Humanize(
 def _font_path(font: str) -> Path:
     name = FONT_FILES.get(font)
     if name is None:
-        from .services.fonts import user_font_path
+        from plotter.services.fonts import user_font_path
 
         path = user_font_path(font)
         if path is None:
@@ -463,7 +463,7 @@ def _use_centerline(font: str) -> bool:
     if font in FONT_FILES:
         return False
     try:
-        from .services.fonts import PLOTTER_MODE, user_font_mode
+        from plotter.services.fonts import PLOTTER_MODE, user_font_mode
     except ImportError:
         return False
     return user_font_mode(font) == PLOTTER_MODE

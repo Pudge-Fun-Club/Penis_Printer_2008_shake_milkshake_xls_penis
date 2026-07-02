@@ -6,7 +6,8 @@ from typing import Any
 
 from fastapi import APIRouter, WebSocket
 
-from ...events import hub
+from plotter.core.events import hub
+
 from ...services.auth import AuthService
 from ..auth import SESSION_COOKIE, auth_bypass_enabled, bypass_session
 

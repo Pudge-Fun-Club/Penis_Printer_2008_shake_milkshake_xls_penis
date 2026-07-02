@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from plotter.jobmeta import read_job_meta
+from plotter.core.jobmeta import read_job_meta
 from plotter.services.profiles import ProfileService
 
 

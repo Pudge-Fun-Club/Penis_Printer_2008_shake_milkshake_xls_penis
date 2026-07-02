@@ -34,7 +34,7 @@ MAX_COMPONENT_ODD = 2_000_000
 def _node_snapper(tol: float):
     """Map coincident endpoints to a shared integer node id (mm grid snap).
 
-    Mirrors the endpoint snapping in :mod:`plotter.linemerge`.
+    Mirrors the endpoint snapping in :mod:`plotter.geometry.linemerge`.
     """
     inv = 1.0 / tol if tol > 0 else 1e9
     node_of: dict[tuple[int, int], int] = {}
@@ -171,7 +171,7 @@ def continuous_path(
     """Collapse each connected component into one continuous stroke.
 
     Args:
-        polylines: complex mm arrays (same convention as :mod:`plotter.drawing`).
+        polylines: complex mm arrays (same convention as :mod:`plotter.artwork.drawing`).
         tol: endpoints closer than this (mm) are treated as one junction.
         max_lines: above this many strokes, return the input unchanged.
 

@@ -9,11 +9,9 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from ...calibration import Calibration
-from ...convert import convert_with_calibration
-from ...gcode_preview import parse_gcode, parse_gcode_3d
-from ...gcode_profile import TEST_PATTERNS, test_pattern
-from ...jobmeta import (
+from plotter.artwork.convert import convert_with_calibration
+from plotter.core.calibration import Calibration
+from plotter.core.jobmeta import (
     delete_job_meta,
     job_profile_status,
     profile_comment,
@@ -21,9 +19,12 @@ from ...jobmeta import (
     rename_job_meta,
     write_job_meta,
 )
-from ...safety import GcodeSafetyChecker, SafetyViolation
+from plotter.core.storage import jobs_dir
+from plotter.gcode.preview import parse_gcode, parse_gcode_3d
+from plotter.gcode.profile import TEST_PATTERNS, test_pattern
+from plotter.gcode.safety import GcodeSafetyChecker, SafetyViolation
+
 from ...services.profiles import ProfileService, profile_meta
-from ...storage import jobs_dir
 
 router = APIRouter(tags=["jobs"])
 

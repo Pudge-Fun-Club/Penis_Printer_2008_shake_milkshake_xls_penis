@@ -138,7 +138,7 @@ def test_invalid_mandala_mode_raises():
 def test_coloring_page_route_clamps_to_plot_area(workspace):
     from fastapi.testclient import TestClient
 
-    from plotter.calibration import Calibration
+    from plotter.core.calibration import Calibration
     from plotter.web.app import create_app
 
     Calibration(plot_width=150.0, plot_height=120.0).save()

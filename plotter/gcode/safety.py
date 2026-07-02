@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import re
 
-from .calibration import Calibration
-from .services.errors import ServiceError
+from plotter.core.calibration import Calibration
+from plotter.services.errors import ServiceError
 
 _WORD = re.compile(r"([A-Z])(-?\d+(?:\.\d+)?)")
 

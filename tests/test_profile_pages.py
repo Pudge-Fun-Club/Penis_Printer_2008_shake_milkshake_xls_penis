@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from plotter.document import get_document_store
+from plotter.core.document import get_document_store
 from plotter.services.profiles import ProfileService
 
 
@@ -160,7 +160,7 @@ class TestSelectionGcode:
     """Plot only a chosen subset of a page's objects (designer selection plot)."""
 
     def _pen_downs(self, filename: str) -> int:
-        from plotter.storage import jobs_dir
+        from plotter.core.storage import jobs_dir
 
         text = (jobs_dir() / filename).read_text()
         return sum(1 for line in text.splitlines() if line.startswith("G1 Z"))

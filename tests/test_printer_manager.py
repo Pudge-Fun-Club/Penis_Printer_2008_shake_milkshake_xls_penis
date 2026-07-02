@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import plotter.printer.factory as factory
-from plotter.position import get_tracker
+from plotter.core.position import get_tracker
 from plotter.printer.base import PrinterBackend
 from plotter.printer.manager import (
     OCTOPRINT,

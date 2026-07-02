@@ -25,7 +25,7 @@ class BackendBusyError(PrinterError):
 
 
 def _state_path() -> Path:
-    from ..calibration import data_dir
+    from plotter.core.calibration import data_dir
 
     return data_dir() / "printer_backend.json"
 
@@ -131,7 +131,7 @@ class PrinterManager:
 
     @staticmethod
     def _invalidate_position() -> None:
-        from ..position import get_tracker
+        from plotter.core.position import get_tracker
 
         get_tracker().invalidate()
 

@@ -3,7 +3,8 @@ from __future__ import annotations
 import re
 import struct
 
-from ..pipeline import OFFICE_EXTENSIONS
+from plotter.artwork.pipeline import OFFICE_EXTENSIONS
+
 from .errors import ServiceError
 
 MAX_UPLOAD_BYTES = 15 * 1024 * 1024

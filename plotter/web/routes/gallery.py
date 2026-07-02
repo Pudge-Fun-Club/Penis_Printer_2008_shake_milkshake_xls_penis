@@ -6,9 +6,10 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from ...config import load_settings
-from ...gcode_preview import parse_gcode, parse_gcode_3d_text
-from ...pipeline import PlotterError
+from plotter.artwork.pipeline import PlotterError
+from plotter.core.config import load_settings
+from plotter.gcode.preview import parse_gcode, parse_gcode_3d_text
+
 from ...services.errors import ServiceError
 from ...services.gallery import GalleryService
 from ...services.settings_store import load_saved

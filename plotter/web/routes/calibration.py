@@ -4,8 +4,9 @@ from fastapi import APIRouter, File, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from ...calibration import Calibration
-from ...export import CalibrationImportError, calibration_from_xml, calibration_to_xml
+from plotter.artwork.export import CalibrationImportError, calibration_from_xml, calibration_to_xml
+from plotter.core.calibration import Calibration
+
 from ...services import PrinterController
 
 router = APIRouter(tags=["calibration"])

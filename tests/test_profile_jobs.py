@@ -6,8 +6,8 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-import plotter.octoprint as op
-from plotter.jobmeta import job_meta_path, read_job_meta
+import plotter.printer.octoprint as op
+from plotter.core.jobmeta import job_meta_path, read_job_meta
 from plotter.services.profiles import ProfileService
 
 

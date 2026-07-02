@@ -3,85 +3,69 @@
 Python backend — G-code generation, calibration, job management, and the
 HTTP API served to the frontend.
 
+The packages follow the data flow: `artwork` (input files) → `geometry`
+(polyline math) → `gcode` (machine output), with `core` as shared plumbing.
+
 ```
 plotter/
 │
-│  ── Core geometry & scene ──────────────────────────────────────────────────
+├── core/                Cross-cutting state & persistence
+│   ├── config.py        App settings dataclasses (env / file backed)
+│   ├── calibration.py   Calibration dataclass (origin, plot area, feeds, pen
+│   │                    heights, obstacles, …) + data_dir()
+│   ├── document.py      DocumentStore — paint pages/groups CRUD (JSON backed)
+│   ├── jobmeta.py       Job sidecar (.meta.json) read/write
+│   ├── storage.py       Path helpers: jobs_dir()
+│   ├── state.py         Shared state store (file or Redis backed)
+│   ├── position.py      Printer position tracking
+│   └── events.py        In-process pub/sub hub for app events
 │
-├── scene_geometry.py    Pure 2-D geometry helpers with no project dependencies.
-│                        Type aliases: Point, Polyline, Polygon, EPS.
-│                        Functions: transform_point, is_mask, mask_polygon,
-│                        inside_convex, subtract_polygon_from_segment,
-│                        subtract_polygon, apply_masks.
-│                        Used exclusively by scene.py.
+├── geometry/            Pure polyline math, no I/O
+│   ├── primitives.py    Point/Polyline/Polygon aliases, transforms, masks
+│   ├── routing.py       Dijkstra travel routing around obstacle zones
+│   ├── linemerge.py     Merge adjacent polylines to reduce pen lifts
+│   └── oneline.py       Eulerian single-stroke path construction
 │
-├── scene.py             Page → G-code pipeline. Imports from scene_geometry.
-│                        Public API:
-│                          page_polylines(page)   — extract unplotted strokes
-│                          page_thumbnail(page)   — SVG path for sidebar thumb
-│                          scene_gcode(page, cal) — full G-code string
-│                          save_scene_job(page, cal, profile, …) → Path
+├── gcode/               Polylines → G-code and its analysis
+│   ├── scene.py         Page → G-code: page_polylines, scene_gcode,
+│   │                    save_scene_job, page_thumbnail
+│   ├── profile.py       vpype config, G-code header/footer, pen up/down,
+│   │                    test patterns
+│   ├── preview.py       G-code → preview polylines (2-D and 3-D viewers)
+│   ├── safety.py        GcodeSafetyChecker — bed limits and obstacle zones
+│   └── metrics.py       G-code quality metrics and plottability score
 │
-│  ── Calibration & profiles ──────────────────────────────────────────────────
+├── artwork/             Input files → plottable polylines
+│   ├── pipeline.py      PlotterError, file conversion orchestration
+│   │                    (PDF/Office/SVG via poppler, libreoffice, vpype)
+│   ├── convert.py       Convert with calibration applied
+│   ├── trace.py         Bitmap → polylines (contour/centerline tracing)
+│   ├── drawing.py       Drawing class: SVG parsing, travel sort, placement
+│   └── export.py        Calibration XML import/export
 │
-├── calibration.py       Calibration dataclass (origin, plot area, feeds, pen
-│                        heights, obstacles, merge tolerance, …). Loads from
-│                        and saves to the JSON config file.
+├── text/                Handwriting / single-line text rendering
+│   └── singleline.py    text_polylines(): font → strokes with humanize/warp
 │
-│  ── G-code pipeline ────────────────────────────────────────────────────────
+├── web/                 FastAPI app: app.py factory + routes/ per domain
+├── services/            Domain services used by routes (gallery, profiles,
+│                        auth, printer, paper, fonts, sources, …)
+├── printer/             Printer backends: serial worker, OctoPrint, discovery
+├── mcp/                 MCP (Model Context Protocol) server endpoint
+├── coloring_pages/      Generated coloring page artwork (mandala, rings, …)
+├── ai_images/           AI image generation service
+├── osm/  sudoku/ maze/  Map / puzzle artwork generators
+├── stroke_fonts/        Recorded stroke-font model, storage and rendering
+├── stream/              Live view streaming sessions
+├── desktop/             pywebview desktop wrapper
 │
-├── export.py            Low-level G-code helpers: calibration_comment,
-│                        coordinate transforms for SVG sources
-│
-├── drawing.py           SVG/DXF → polylines, used by the file-convert pipeline
-│
-├── convert.py           High-level convert pipeline (SVG/DXF file → job)
-│
-├── pipeline.py          PlotterError exception, shared pipeline utilities
-│
-├── linemerge.py         Merge collinear/adjacent polylines to reduce pen lifts
-│
-├── routing.py           Dijkstra travel routing around obstacle zones
-│
-├── safety.py            GcodeSafetyChecker — validates generated G-code against
-│                        bed limits and obstacle zones before it is written
-│
-├── singleline.py        Single-line font rendering (text → strokes)
-│
-├── trace.py             Bitmap → polylines (edge tracing)
-│
-│  ── State & storage ────────────────────────────────────────────────────────
-│
-├── state.py             Shared printer state (position, status, job progress)
-│
-├── storage.py           Path helpers: jobs_dir(), config_path(), …
-│
-├── jobmeta.py           Job sidecar (.meta.json) read/write
-│
-├── gcode_preview.py     G-code → preview polylines (for the 3-D viewer)
-│
-├── gcode_profile.py     Per-job profile snapshot written into G-code header
-│
-├── gallery_metrics.py   Compute GalleryScore/GalleryMetrics for uploaded SVGs
-│
-├── position.py          Printer position tracking and coordinate helpers
-│
-│  ── HTTP / device layer ────────────────────────────────────────────────────
-│
-├── document.py          FastAPI application factory and route registration
-│
-├── octoprint.py         OctoPrint REST client
-│
-├── config.py            App configuration (loaded from environment / file)
-│
-├── cli.py               CLI entry point (`python -m plotter`)
-│
+├── fonts/               Bundled single-line fonts (used by text/)
+├── cli.py               CLI entry point (`gcodescribe`)
 └── vpype_config.toml    vpype optimisation preset used during conversion
 ```
 
 ## Key invariants
 
-- `scene_geometry.py` has **no project imports** — safe to unit-test in isolation.
-- `scene.py` is the only file that imports `scene_geometry`.
+- `geometry/` has **no project imports outside itself** — safe to unit-test in
+  isolation; `geometry/primitives.py` is imported only by `gcode/scene.py`.
 - G-code is never written directly by route handlers; they always call
   `save_scene_job` or `convert`, which run `GcodeSafetyChecker` before saving.

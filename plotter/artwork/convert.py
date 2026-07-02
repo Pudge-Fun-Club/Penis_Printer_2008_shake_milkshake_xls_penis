@@ -3,11 +3,11 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from .calibration import Calibration
-from .export import calibration_comment
-from .gcode_profile import build_vpype_config, layout_operations
-from .pipeline import PipelineResult, process_file
-from .safety import GcodeSafetyChecker, SafetyViolation
+from plotter.artwork.export import calibration_comment
+from plotter.artwork.pipeline import PipelineResult, process_file
+from plotter.core.calibration import Calibration
+from plotter.gcode.profile import build_vpype_config, layout_operations
+from plotter.gcode.safety import GcodeSafetyChecker, SafetyViolation
 
 
 def convert_with_calibration(

@@ -6,17 +6,18 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from ...calibration import Calibration
-from ...document import get_document_store
-from ...gallery_metrics import evaluate_gcode
-from ...gcode_preview import parse_gcode_3d_text
-from ...jobmeta import delete_job_meta, read_job_meta
-from ...pipeline import PlotterError
-from ...scene import page_polylines, save_scene_job, scene_gcode
+from plotter.artwork.pipeline import PlotterError
+from plotter.core.calibration import Calibration
+from plotter.core.document import get_document_store
+from plotter.core.jobmeta import delete_job_meta, read_job_meta
+from plotter.core.storage import jobs_dir
+from plotter.gcode.metrics import evaluate_gcode
+from plotter.gcode.preview import parse_gcode_3d_text
+from plotter.gcode.scene import page_polylines, save_scene_job, scene_gcode
+from plotter.text.singleline import text_polylines
+
 from ...services.profiles import ProfileService, profile_meta
 from ...services.upload_validation import MAX_GCODE_BYTES
-from ...singleline import text_polylines
-from ...storage import jobs_dir
 from .jobs import _job_info
 
 router = APIRouter(tags=["pages"])

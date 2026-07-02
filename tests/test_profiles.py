@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from plotter.calibration import Calibration
+from plotter.core.calibration import Calibration
 from plotter.services.profiles import (
     FINGERPRINT_FIELDS,
     ProfileConflict,

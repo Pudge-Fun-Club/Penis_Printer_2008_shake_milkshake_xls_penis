@@ -4,7 +4,7 @@ import json
 import logging
 from pathlib import Path
 
-from ..calibration import data_dir
+from plotter.core.calibration import data_dir
 
 log = logging.getLogger(__name__)
 

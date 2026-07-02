@@ -3,12 +3,13 @@ from __future__ import annotations
 import numpy as np
 from fastapi import APIRouter, HTTPException, Query
 
-from ...calibration import Calibration
-from ...drawing import Drawing, placed_gcode
-from ...gallery_metrics import evaluate_gcode
-from ...gcode_preview import parse_gcode_3d_text
+from plotter.artwork.drawing import Drawing, placed_gcode
+from plotter.artwork.pipeline import PlotterError
+from plotter.core.calibration import Calibration
+from plotter.gcode.metrics import evaluate_gcode
+from plotter.gcode.preview import parse_gcode_3d_text
+
 from ...osm import BBox, OsmMapRequest, generate_osm_map, geocode
-from ...pipeline import PlotterError
 from ...services.upload_validation import MAX_GCODE_BYTES
 
 router = APIRouter(tags=["osm-map"])

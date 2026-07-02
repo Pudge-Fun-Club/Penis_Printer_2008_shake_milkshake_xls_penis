@@ -130,7 +130,7 @@ def test_osm_map_route_contract_and_plot_area_clamp(workspace, monkeypatch):
     from fastapi.testclient import TestClient
 
     import plotter.osm.generate as osm_generate
-    from plotter.calibration import Calibration
+    from plotter.core.calibration import Calibration
     from plotter.web.app import create_app
 
     monkeypatch.setattr(osm_generate, "fetch_overpass", lambda _query: SAMPLE_OVERPASS)
@@ -213,7 +213,7 @@ def test_osm_map_gcode_endpoint_returns_score_and_3d(workspace, monkeypatch):
     from fastapi.testclient import TestClient
 
     import plotter.osm.generate as osm_generate
-    from plotter.calibration import Calibration
+    from plotter.core.calibration import Calibration
     from plotter.web.app import create_app
 
     monkeypatch.setattr(osm_generate, "fetch_overpass", lambda _query: SAMPLE_OVERPASS)

@@ -12,7 +12,8 @@ import json
 import re
 from pathlib import Path
 
-from ..calibration import data_dir
+from plotter.core.calibration import data_dir
+
 from .model import (
     _error,  # shared ServiceError factory
     empty_document,

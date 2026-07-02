@@ -15,15 +15,15 @@ from pathlib import Path
 
 import numpy as np
 
-from ..drawing import load_svg_drawing
-from ..pipeline import (
+from plotter.artwork.drawing import load_svg_drawing
+from plotter.artwork.pipeline import (
     OFFICE_EXTENSIONS,
     PlotterError,
     convert_office_to_pdf,
     convert_pdf_to_svg_files,
     pdf_page_count,
 )
-from ..trace import (
+from plotter.artwork.trace import (
     IMAGE_DPI,
     TRACE_DPI,
     centerline_image_to_drawing,

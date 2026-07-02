@@ -5,7 +5,7 @@ import os
 import time
 from pathlib import Path
 
-from .services.profiles import ProfileService
+from plotter.services.profiles import ProfileService
 
 
 def job_meta_path(gcode_path: Path) -> Path:

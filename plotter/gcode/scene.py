@@ -6,15 +6,15 @@ from pathlib import Path
 
 import numpy as np
 
-from .calibration import Calibration
-from .export import calibration_comment
-from .jobmeta import profile_comment, write_job_meta
-from .linemerge import merge_polylines
-from .oneline import continuous_polylines
-from .pipeline import PlotterError
-from .routing import route_travel
-from .safety import GcodeSafetyChecker
-from .scene_geometry import (
+from plotter.artwork.export import calibration_comment
+from plotter.artwork.pipeline import PlotterError
+from plotter.core.calibration import Calibration
+from plotter.core.jobmeta import profile_comment, write_job_meta
+from plotter.core.storage import jobs_dir
+from plotter.gcode.safety import GcodeSafetyChecker
+from plotter.geometry.linemerge import merge_polylines
+from plotter.geometry.oneline import continuous_polylines
+from plotter.geometry.primitives import (
     Point,
     Polygon,
     Polyline,
@@ -23,7 +23,7 @@ from .scene_geometry import (
     mask_polygon,
     transform_point,
 )
-from .storage import jobs_dir
+from plotter.geometry.routing import route_travel
 
 
 def page_polylines(page: dict) -> list[Polyline]:
@@ -343,7 +343,7 @@ def save_scene_job(
     cal = cal or Calibration.load()
     gcode = scene_gcode(page, cal)
     if profile is None:
-        from .services.profiles import ProfileService
+        from plotter.services.profiles import ProfileService
 
         profile = ProfileService().active_profile_meta()
     raw_stem = str(page.get("name") or page.get("id") or "paint")

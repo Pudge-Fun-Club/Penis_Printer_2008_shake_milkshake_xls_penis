@@ -4,8 +4,8 @@ import threading
 import time
 import uuid
 
-from .events import hub
-from .state import StateStore, create_store
+from plotter.core.events import hub
+from plotter.core.state import StateStore, create_store
 
 
 def _emit(action: str, *, page_id: str | None = None, mcp: bool = False) -> None:
@@ -30,7 +30,7 @@ def _page_thumbnail(page: dict) -> dict | None:
     """Compact sidebar preview; tolerant so the store keeps working even if
     the scene/geometry layer is unavailable."""
     try:
-        from .scene import page_thumbnail
+        from plotter.gcode.scene import page_thumbnail
 
         return page_thumbnail(page)
     except Exception:
@@ -41,7 +41,7 @@ def _active_profile_meta() -> dict | None:
     """Active profile for new pages; tolerant so the paint store keeps
     working even if the profile layer is unavailable."""
     try:
-        from .services.profiles import ProfileService
+        from plotter.services.profiles import ProfileService
 
         return ProfileService().active_profile_meta()
     except Exception:

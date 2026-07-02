@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Query
 
-from ...calibration import Calibration
+from plotter.core.calibration import Calibration
+
 from ...maze.generate import generate_maze, point_to_json
 from ...maze.types import MazeType
 

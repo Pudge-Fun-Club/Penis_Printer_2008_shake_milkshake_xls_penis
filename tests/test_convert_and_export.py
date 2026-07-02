@@ -4,15 +4,15 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from plotter.calibration import Calibration
-from plotter.convert import convert_with_calibration
-from plotter.export import (
+from plotter.artwork.convert import convert_with_calibration
+from plotter.artwork.export import (
     CalibrationImportError,
     calibration_from_xml,
     calibration_to_xml,
 )
-from plotter.gcode_preview import parse_gcode
-from plotter.safety import GcodeSafetyChecker, SafetyViolation
+from plotter.core.calibration import Calibration
+from plotter.gcode.preview import parse_gcode
+from plotter.gcode.safety import GcodeSafetyChecker, SafetyViolation
 
 SVG = """<?xml version="1.0"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="80mm"

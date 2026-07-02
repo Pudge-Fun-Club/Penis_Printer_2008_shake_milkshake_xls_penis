@@ -9,7 +9,8 @@ from uuid import uuid4
 
 from fontTools.ttLib import TTFont
 
-from ..calibration import data_dir
+from plotter.core.calibration import data_dir
+
 from . import ServiceError
 
 FontMode = str
@@ -194,7 +195,7 @@ def delete_font(font_id: str) -> None:
 
 def _clear_renderer_cache() -> None:
     try:
-        from ..singleline import _glyph_centerline, _load_font
+        from plotter.text.singleline import _glyph_centerline, _load_font
     except ImportError:
         return
     _load_font.cache_clear()

@@ -84,7 +84,7 @@ def test_masked_maze_reports_mask_and_is_connected():
 def test_route_clamps_to_plot_area(workspace):
     from fastapi.testclient import TestClient
 
-    from plotter.calibration import Calibration
+    from plotter.core.calibration import Calibration
     from plotter.web.app import create_app
 
     Calibration(plot_width=150.0, plot_height=120.0).save()

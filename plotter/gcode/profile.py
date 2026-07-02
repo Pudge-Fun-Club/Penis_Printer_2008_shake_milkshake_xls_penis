@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from .calibration import Calibration
-from .export import calibration_comment
-from .safety import GcodeSafetyChecker
+from plotter.artwork.export import calibration_comment
+from plotter.core.calibration import Calibration
+from plotter.gcode.safety import GcodeSafetyChecker
 
 
 def build_vpype_config(cal: Calibration, profile: str = "plotter") -> str:

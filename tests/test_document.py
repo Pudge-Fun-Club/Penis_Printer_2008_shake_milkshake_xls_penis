@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import plotter.document as document
-from plotter.document import DocumentStore
-from plotter.state import FileStateStore
+import plotter.core.document as document
+from plotter.core.document import DocumentStore
+from plotter.core.state import FileStateStore
 
 
 def _store(workspace) -> DocumentStore:

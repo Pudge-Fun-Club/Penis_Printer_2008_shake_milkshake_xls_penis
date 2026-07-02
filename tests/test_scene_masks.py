@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from plotter.scene import page_polylines
+from plotter.gcode.scene import page_polylines
 
 
 def _line(z: int = 0) -> dict:

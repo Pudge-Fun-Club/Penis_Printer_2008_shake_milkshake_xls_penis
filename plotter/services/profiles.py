@@ -10,7 +10,8 @@ import uuid
 from dataclasses import fields
 from pathlib import Path
 
-from ..calibration import Calibration, data_dir
+from plotter.core.calibration import Calibration, data_dir
+
 from .errors import ServiceError
 
 

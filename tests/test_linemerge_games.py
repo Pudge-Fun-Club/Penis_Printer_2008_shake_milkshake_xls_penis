@@ -15,7 +15,7 @@ from collections import Counter
 import pytest
 
 from plotter.coloring_pages import ColoringPageGenerator
-from plotter.linemerge import merge_polylines
+from plotter.geometry.linemerge import merge_polylines
 from plotter.maze.generate import generate_maze
 
 MANDALA_MODES = ["flower", "star", "butterfly", "sun", "nature", "magic"]

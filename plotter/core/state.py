@@ -6,7 +6,7 @@ import os
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from .calibration import data_dir
+from plotter.core.calibration import data_dir
 
 log = logging.getLogger(__name__)
 

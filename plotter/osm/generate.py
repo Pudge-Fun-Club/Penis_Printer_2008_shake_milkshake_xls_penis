@@ -3,7 +3,8 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 
-from ..linemerge import merge_polylines
+from plotter.geometry.linemerge import merge_polylines
+
 from .overpass import build_overpass_query, fetch_overpass
 from .types import OsmMapRequest, OsmMapResult
 

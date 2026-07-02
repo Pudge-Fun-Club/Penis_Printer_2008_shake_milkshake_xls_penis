@@ -10,12 +10,13 @@ from pathlib import Path
 
 import numpy as np
 
-from ..calibration import Calibration, data_dir
-from ..drawing import load_svg_drawing, placed_gcode
-from ..gallery_metrics import evaluate_gcode
-from ..jobmeta import profile_comment
-from ..pipeline import PlotterError
-from ..trace import IMAGE_DPI, trace_image_to_svg
+from plotter.artwork.drawing import load_svg_drawing, placed_gcode
+from plotter.artwork.pipeline import PlotterError
+from plotter.artwork.trace import IMAGE_DPI, trace_image_to_svg
+from plotter.core.calibration import Calibration, data_dir
+from plotter.core.jobmeta import profile_comment
+from plotter.gcode.metrics import evaluate_gcode
+
 from .asset_pages import (
     DESIGNER_POINTS,
     VALID_MODES,

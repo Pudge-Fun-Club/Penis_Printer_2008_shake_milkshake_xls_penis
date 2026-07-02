@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
 
-from ...calibration import Calibration
+from plotter.core.calibration import Calibration
+
 from ...coloring_pages import ColoringPageGenerator
 
 router = APIRouter(tags=["coloring-pages"])

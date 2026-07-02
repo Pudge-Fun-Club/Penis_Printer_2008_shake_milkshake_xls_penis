@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import threading
 
-from .calibration import Calibration
-from .state import StateStore, create_store
+from plotter.core.calibration import Calibration
+from plotter.core.state import StateStore, create_store
 
 
 class PositionTracker:

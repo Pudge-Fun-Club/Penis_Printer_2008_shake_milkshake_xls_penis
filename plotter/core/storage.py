@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .calibration import data_dir
+from plotter.core.calibration import data_dir
 
 
 def jobs_dir() -> Path:

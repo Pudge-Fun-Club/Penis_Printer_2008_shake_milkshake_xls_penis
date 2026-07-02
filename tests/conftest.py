@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-import plotter.document as document
-import plotter.position as position
+import plotter.core.document as document
+import plotter.core.position as position
 import plotter.printer.factory as printer_factory
 import plotter.services.auth as auth
-from plotter.calibration import Calibration
+from plotter.core.calibration import Calibration
 
 
 @pytest.fixture

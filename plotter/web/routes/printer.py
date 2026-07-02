@@ -6,13 +6,14 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from ...calibration import Calibration
-from ...jobmeta import job_profile_status, read_job_meta_checked
+from plotter.core.calibration import Calibration
+from plotter.core.jobmeta import job_profile_status, read_job_meta_checked
+from plotter.core.storage import jobs_dir
+from plotter.gcode.safety import GcodeSafetyChecker, SafetyViolation
+
 from ...printer.manager import BackendBusyError, BackendUnavailableError
-from ...safety import GcodeSafetyChecker, SafetyViolation
 from ...services import PrinterController
 from ...services.profiles import ProfileService, profile_meta
-from ...storage import jobs_dir
 
 log = logging.getLogger(__name__)
 
@@ -66,7 +67,8 @@ def serial_probe(req: SerialProbeRequest) -> dict:
 @router.get("/printer/octoprint/check")
 def octoprint_check() -> dict:
     """Probe OctoPrint reachability with the currently saved settings."""
-    from ...config import load_settings
+    from plotter.core.config import load_settings
+
     from ...printer.octoprint import OctoPrintClient, OctoPrintError
     from ...services.settings_store import load_saved
 

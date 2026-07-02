@@ -249,14 +249,14 @@ class SerialWorker:
 
     @staticmethod
     def _pen_up_lines() -> list[str]:
-        from ..calibration import Calibration
+        from plotter.core.calibration import Calibration
 
         cal = Calibration.load()
         return ["G90", f"G1 Z{cal.pen_up_z:.3f} F{cal.z_feed:.0f}"]
 
     @staticmethod
     def _park_lines() -> list[str]:
-        from ..calibration import Calibration
+        from plotter.core.calibration import Calibration
 
         cal = Calibration.load()
         return [
@@ -266,7 +266,7 @@ class SerialWorker:
 
     @staticmethod
     def _return_from_pause_lines(x: float, y: float) -> list[str]:
-        from ..calibration import Calibration
+        from plotter.core.calibration import Calibration
 
         cal = Calibration.load()
         return [

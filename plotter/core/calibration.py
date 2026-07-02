@@ -83,7 +83,7 @@ class Calibration:
         # active profile (lazy import — services may not be loadable in
         # stripped-down contexts, and a hard import would be circular).
         try:
-            from .services.profiles import sync_active_profile_calibration
+            from plotter.services.profiles import sync_active_profile_calibration
         except ImportError:
             return
         sync_active_profile_calibration(self)
