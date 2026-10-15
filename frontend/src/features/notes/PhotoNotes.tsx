@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ComponentProps } from "react";
 import { api } from "../../api";
 import type { NotesPreview, NotesStatus } from "../../api/client/notes";
 import Notes from "./Notes";
+import PaperStack from "./PaperStack";
 
 function duration(seconds: number) {
   const total = Math.round(seconds);
@@ -34,14 +35,14 @@ export default function PhotoNotes(props: ComponentProps<typeof Notes>) {
   const [model, setModel] = useState("gpt-4.1-mini");
   const input = useRef<HTMLInputElement>(null);
   const version = useRef(0);
-  const active = /printing|paused/i.test(status?.job?.state ?? "");
+  const active = /printing|paused|pausing|resuming|cancelling/i.test(status?.job?.state ?? "");
   const connected = !!status?.online;
 
   useEffect(() => {
     if (!visible) return;
     api.notesStatus().then(s => { setInfo(s); setModel(s.ocrModel); }).catch(e => setError(e.message));
     api.position().then(p => setHomed(p.homed)).catch(() => setHomed(false));
-  }, [visible, status?.online, status?.job?.state]);
+  }, [visible, manual, status?.online, status?.job?.state]);
 
   useEffect(() => {
     if (!file) { setPhotoUrl(""); return; }
@@ -104,6 +105,23 @@ export default function PhotoNotes(props: ComponentProps<typeof Notes>) {
       if (!filename) throw new Error("В SVG нет линий для записи.");
       await api.send(filename, true);
       setPaperReady(false); setMessage("Принтер пишет SVG. Дождись завершения перед заменой бумаги.");
+      onAction();
+    } catch (e) { setError((e as Error).message); }
+    finally { setBusy(""); }
+  };
+
+  const removeSheet = async (thickness: number) => {
+    const stack = info?.paperStack;
+    if (!stack || busy || active) return;
+    const hadPreview = !!preview;
+    invalidate();
+    setBusy("Учитываю снятый лист…");
+    try {
+      const updated = await api.notesNextSheet({ thickness_mm: thickness,
+        profile_id: stack.profileId, fingerprint: stack.fingerprint });
+      setInfo(updated);
+      if (asset && hadPreview) setPreview(await api.notesVectorPreview({ id: asset, font, margin }));
+      setMessage("Лист учтён. Проверь SVG и снова подтверди готовность бумаги.");
       onAction();
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(""); }
@@ -215,6 +233,7 @@ export default function PhotoNotes(props: ComponentProps<typeof Notes>) {
           <span className={info?.paperCalibrated ? "notes-ok" : "notes-missing"}>{info?.paperCalibrated ? "● Бумага откалибрована" : "○ Укажи положение бумаги"}</span>
           {!homed && <span className="notes-missing">○ Сними ручку и выполни поиск нуля</span>}
         </div>
+        <PaperStack info={info} disabled={!!busy || active} onRemove={removeSheet} />
         <label className="notes-confirm"><input type="checkbox" checked={paperReady} disabled={!!busy || active}
           onChange={e => setPaperReady(e.target.checked)} />Ручка установлена, чистый лист закреплён</label>
         <button className="primary notes-write" disabled={!preview || !ready || !paperReady || !!busy || active} onClick={write}>Написать SVG</button>

@@ -165,6 +165,36 @@ or calibration changes were performed. Estimates include the current profile;
 they are not measured printer timings. Pull/rebuild/restart the deployment on
 the other computer and regenerate the SVG/job to use this route.
 
+### Task 11: Follow the surface of a stack without knowing its sheet count
+
+User requirement: removing one sheet lowers the writing surface by one sheet's
+thickness. Calibrate against the initial top sheet; never request total count.
+Use an explicit physical-sheet confirmation, separate from selecting a preview.
+Default thickness is 0.10 mm (editable); update both pen heights equally and
+keep their lift difference. Persist in the active calibration profile.
+
+Files: core/calibration.py, services/profiles.py, notes/paper_stack.py,
+web/routes/notes.py, frontend notes client + PaperStack.tsx + both notes views,
+tests/test_notes_paper_stack.py and notes component tests.
+
+- [x] Write failing API tests: repeated sheet removal, persisted heights and
+      thickness, stale/duplicate request rejection, busy/uncalibrated/underflow
+      rejection without movement, and new G-code heights/old-job rejection.
+- [x] Add compare-and-update profile mutation, validated next-sheet endpoint
+      and status containing thickness, heights and profile identity.
+- [x] Write failing UI tests and add shared controls to photo and text modes;
+      refresh the reviewed route, preserve text page selection and require
+      paper confirmation again. Ordinary pagination must not change Z.
+- [x] Run full backend/frontend tests, build, lint and browser verification
+      with USB disabled; review, document, commit and publish to main.
+
+Verification: 729 backend tests, 133 frontend tests and production build pass;
+changed-file Ruff and diff checks pass. Browser on an isolated server confirmed
+11.62/12.72 → 11.50/12.60 at 0.12 mm thickness, refreshed SVG, cleared paper
+confirmation, persistence on reload and regenerated G-code using both adjusted
+heights. Focused review found no critical/important issues. No physical movement
+or changes to the user's real calibration were performed.
+
 ## Execution Record
 
 - User requested immediate work; implement in the supplied directory on feat/notebook-plotter.

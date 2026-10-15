@@ -109,6 +109,7 @@ class TestXmlExport:
 
 class TestXmlImport:
     def test_roundtrip_preserves_all_fields(self, cal):
+        cal.paper_thickness_mm = 0.12
         restored = calibration_from_xml(calibration_to_xml(cal))
         assert restored.as_dict() == cal.as_dict()
 

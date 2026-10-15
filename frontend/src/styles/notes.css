@@ -38,3 +38,6 @@
 @media (max-width: 850px) { .notes-columns { grid-template-columns: 1fr; } .notes-heading { align-items: start; flex-direction: column; } .notes-heading h2 { font-size: 25px; } .notes-editor, .notes-output { padding: 18px; } }
 .notes-stats { display: grid; gap: 6px; padding: 12px; margin: 12px 0; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); }
 .notes-stats p { margin: 0; }
+.notes-stack strong { display: block; margin-bottom: 2px; }
+.notes-stack label { margin: 6px 0; }
+.notes-stack button { margin: 4px 0; }

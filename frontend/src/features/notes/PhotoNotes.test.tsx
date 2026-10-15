@@ -6,6 +6,7 @@ import PhotoNotes from "./PhotoNotes";
 const mocks = vi.hoisted(() => ({
   notesStatus: vi.fn(), notesVectorize: vi.fn(), notesVectorPreview: vi.fn(),
   notesVectorJobs: vi.fn(), position: vi.fn(), send: vi.fn(), jobCommand: vi.fn(),
+  notesNextSheet: vi.fn(),
 }));
 vi.mock("../../api", () => ({ api: mocks }));
 const sheet = { number: 1, text: "", width: 160, height: 160,
@@ -17,7 +18,8 @@ beforeEach(() => {
   Object.values(mocks).forEach(m => m.mockReset());
   mocks.notesStatus.mockResolvedValue({ ocrReady: false, ocrModel: "gpt-4.1-mini",
     penCalibrated: true, paperCalibrated: true, width: 160, height: 160,
-    fonts: [{ id: "notes-neat", label: "Аккуратный" }] });
+    fonts: [{ id: "notes-neat", label: "Аккуратный" }],
+    paperStack: { profileId: "p", fingerprint: "v1", thicknessMm: 0.1, penDownZ: 1.4, penUpZ: 7.4 } });
   mocks.position.mockResolvedValue({ homed: true });
   mocks.notesVectorize.mockResolvedValue({ id: "a".repeat(24), strokes: 3 });
   mocks.notesVectorPreview.mockResolvedValue(preview);
@@ -26,6 +28,49 @@ beforeEach(() => {
   mocks.send.mockResolvedValue({ done: true });
   URL.createObjectURL = vi.fn(() => "blob:test");
   URL.revokeObjectURL = vi.fn();
+});
+
+it("lowers the stack on confirmation and rebuilds SVG without starting the printer", async () => {
+  app();
+  await vectorize();
+  fireEvent.click(screen.getByLabelText("Ручка установлена, чистый лист закреплён"));
+  mocks.notesNextSheet.mockResolvedValue({ ...(await mocks.notesStatus()),
+    paperStack: { profileId: "p", fingerprint: "v2", thicknessMm: 0.12, penDownZ: 1.28, penUpZ: 7.28 } });
+  fireEvent.change(screen.getByLabelText("Толщина одного листа, мм"), { target: { value: "0.12" } });
+  fireEvent.click(screen.getByRole("button", { name: "Лист убран — следующий" }));
+  await screen.findByText(/Высота касания: 1,28 мм/);
+  expect(mocks.notesNextSheet).toHaveBeenCalledWith({ thickness_mm: 0.12, profile_id: "p", fingerprint: "v1" });
+  expect(mocks.notesVectorPreview).toHaveBeenCalledTimes(2);
+  expect((screen.getByLabelText("Ручка установлена, чистый лист закреплён") as HTMLInputElement).checked).toBe(false);
+  expect((screen.getByRole("button", { name: "Написать SVG" }) as HTMLButtonElement).disabled).toBe(true);
+  expect(mocks.send).not.toHaveBeenCalled();
+});
+
+it("disables physical sheet adjustment while printing or paused", async () => {
+  render(<PhotoNotes visible status={{ online: true, job: { state: "Paused" } }} onAction={vi.fn()} onSetup={vi.fn()} />);
+  const button = await screen.findByRole("button", { name: "Лист убран — следующий" });
+  expect((button as HTMLButtonElement).disabled).toBe(true);
+});
+
+it("refreshes stack heights when returning from manual notes", async () => {
+  app();
+  await screen.findByText(/Высота касания: 1,4 мм/);
+  fireEvent.click(screen.getByRole("button", { name: "Ввести текст вручную" }));
+  await screen.findByLabelText("Текст конспекта");
+  mocks.notesStatus.mockResolvedValue({ ...(await mocks.notesStatus()),
+    paperStack: { profileId: "p", fingerprint: "v2", thicknessMm: 0.1, penDownZ: 1.3, penUpZ: 7.3 } });
+  fireEvent.click(screen.getByRole("button", { name: /Фото целой страницы/ }));
+  await screen.findByText(/Высота касания: 1,3 мм/);
+});
+
+it("shows a failed sheet adjustment and leaves printing unconfirmed", async () => {
+  app();
+  await vectorize();
+  mocks.notesNextSheet.mockRejectedValue(new Error("Высота выйдет за пределы Z"));
+  fireEvent.click(screen.getByRole("button", { name: "Лист убран — следующий" }));
+  expect((await screen.findByRole("alert")).textContent).toContain("за пределы Z");
+  expect((screen.getByRole("button", { name: "Написать SVG" }) as HTMLButtonElement).disabled).toBe(true);
+  expect(mocks.send).not.toHaveBeenCalled();
 });
 afterEach(cleanup);
 

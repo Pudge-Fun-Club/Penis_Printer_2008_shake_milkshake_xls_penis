@@ -10,10 +10,13 @@ from plotter.core.calibration import Calibration
 from plotter.notes import layout, ocr, vectorize
 from plotter.notes.guards import paper_applied
 from plotter.notes.handwriting import STYLES
+from plotter.notes.paper_stack import remove_sheet, stack_status
 from plotter.services.errors import ServiceError
 from plotter.services.fonts import list_fonts
+from plotter.services.profiles import ProfileService
 from plotter.services.settings_store import patch_saved
 from plotter.services.upload_validation import MAX_UPLOAD_BYTES
+from plotter.web.deps import printer_controller
 
 router = APIRouter(tags=["notes"])
 
@@ -45,18 +48,34 @@ class OcrSettingsRequest(BaseModel):
 
 @router.get("/notes/status")
 def status() -> dict:
-    cal = Calibration.load()
+    profile = ProfileService().active()
+    cal = Calibration().merged(profile["calibration"])
     return {
         **ocr.status(),
         "penCalibrated": cal.pen_calibrated,
         "paperCalibrated": paper_applied(cal),
         "width": cal.plot_width,
         "height": cal.plot_height,
+        "paperStack": stack_status(profile),
         "fonts": [
             *STYLES,
             *[{"id": f.id, "label": f.label} for f in list_fonts() if f.id != "block"],
         ],
     }
+
+
+class NextSheetRequest(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+    thickness_mm: float = Field(ge=0.001, le=1)
+    profile_id: str = Field(min_length=1, max_length=100)
+    fingerprint: str = Field(min_length=1, max_length=100)
+
+
+@router.post("/notes/next-sheet")
+def next_sheet(req: NextSheetRequest) -> dict:
+    # Change only future job coordinates; do not jog or home the printer.
+    remove_sheet(**req.model_dump(), status=printer_controller().status())
+    return status()
 
 
 @router.put("/notes/ocr-settings")

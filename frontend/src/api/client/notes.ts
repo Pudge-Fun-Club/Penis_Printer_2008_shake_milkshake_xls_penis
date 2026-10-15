@@ -8,6 +8,10 @@ export interface NotesStatus {
   width: number;
   height: number;
   fonts: { id: string; label: string }[];
+  paperStack?: {
+    profileId: string; fingerprint: string;
+    thicknessMm: number; penDownZ: number; penUpZ: number;
+  };
 }
 export interface NotesOptions {
   text: string;
@@ -44,8 +48,10 @@ export interface VectorOptions { id: string; font: string; margin: number }
 const json = (body: unknown) => ({
   method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
 });
+export interface NextSheetOptions { thickness_mm: number; profile_id: string; fingerprint: string }
 export const notesClient = {
   notesStatus: () => req<NotesStatus>("/api/notes/status"),
+  notesNextSheet: (options: NextSheetOptions) => req<NotesStatus>("/api/notes/next-sheet", json(options)),
   notesVectorize: (file: File, straighten = false, detail = 3) => {
     const body = new FormData();
     body.append("file", file);

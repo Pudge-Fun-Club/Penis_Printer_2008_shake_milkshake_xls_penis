@@ -27,6 +27,7 @@ export interface Calibration {
   park_after_plot: boolean;
   paper_corners: Record<string, [number, number]>;
   paper_margin: number;
+  paper_thickness_mm?: number;
   obstacles: Obstacle[];
   merge_tolerance: number;
 }

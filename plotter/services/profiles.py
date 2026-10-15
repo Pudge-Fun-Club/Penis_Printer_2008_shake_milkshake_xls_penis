@@ -325,6 +325,16 @@ class ProfileService:
                 self._write_mirror(profile["calibration"])
             return self._full(profile)
 
+    def update_active_calibration(self, profile_id: str, fingerprint: str, updates: dict) -> dict:
+        """Apply a reviewed adjustment once, atomically with profile selection."""
+        with _lock:
+            current = self.active()
+            if current["id"] != profile_id or current["fingerprint"] != fingerprint:
+                raise ProfileConflict(
+                    "Калибровка уже изменилась. Обновите страницу и проверьте высоту ручки."
+                )
+            return self.update(profile_id, calibration=updates)
+
     def duplicate(self, profile_id: str, name: str | None = None) -> dict:
         with _lock:
             self.ensure_migrated()

@@ -26,7 +26,9 @@ def calibration_to_xml(cal: Calibration) -> str:
         height=f"{cal.plot_height}",
     )
 
-    paper = SubElement(root, "paper", margin=f"{cal.paper_margin}")
+    paper = SubElement(
+        root, "paper", margin=f"{cal.paper_margin}", thicknessMm=f"{cal.paper_thickness_mm}"
+    )
     for name, point in sorted(cal.paper_corners.items()):
         SubElement(paper, "corner", id=name, x=f"{point[0]}", y=f"{point[1]}")
 
@@ -102,6 +104,7 @@ def calibration_from_xml(xml: str, *, base: Calibration | None = None) -> Calibr
     paper = root.find("paper")
     if paper is not None:
         num(paper, "margin", "paper_margin")
+        num(paper, "thicknessMm", "paper_thickness_mm")
         corners: dict[str, list[float]] = {}
         for corner in paper.findall("corner"):
             cid = corner.get("id")

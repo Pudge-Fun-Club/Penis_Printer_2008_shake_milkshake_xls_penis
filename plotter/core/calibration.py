@@ -51,6 +51,7 @@ class Calibration:
     # sheet's corners (printer coordinates, mm). Keys: bl, br, tr, tl.
     paper_corners: dict = field(default_factory=dict)
     paper_margin: float = 0.0  # inset from the paper edge to the plot area
+    paper_thickness_mm: float = 0.1  # surface drop when one top sheet is removed
 
     # No-go obstacle zones (e.g. clamps): list of dicts with keys
     # id, x, y, w, h  — all in printer/bed coordinates (mm).

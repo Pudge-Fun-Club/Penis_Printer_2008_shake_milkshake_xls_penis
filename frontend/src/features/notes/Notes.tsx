@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../api";
 import type { NotesOptions, NotesPreview, NotesStatus } from "../../api/client/notes";
+import PaperStack from "./PaperStack";
 
 export default function Notes({ visible, status, onAction, onSetup }: {
   visible: boolean;
@@ -20,7 +21,7 @@ export default function Notes({ visible, status, onAction, onSetup }: {
   const [paperReady, setPaperReady] = useState(false);
   const [homed, setHomed] = useState(false);
   const generation = useRef(0);
-  const active = /printing|paused/i.test(status?.job?.state ?? "");
+  const active = /printing|paused|pausing|resuming|cancelling/i.test(status?.job?.state ?? "");
   const connected = !!status?.online;
 
   useEffect(() => {
@@ -66,6 +67,27 @@ export default function Notes({ visible, status, onAction, onSetup }: {
       await api.send(filename, true);
       setPreview(ready); setPaperReady(false);
       setMessage(`Пишу лист ${page + 1}. Для следующего листа дождитесь завершения и замените бумагу.`);
+      onAction();
+    } catch (e) { setError((e as Error).message); }
+    finally { setBusy(""); }
+  };
+
+  const removeSheet = async (thickness: number) => {
+    const stack = info?.paperStack;
+    if (!stack || busy || active) return;
+    const hadPreview = !!preview;
+    generation.current += 1;
+    setPreview(null); setPaperReady(false); setError(""); setMessage("");
+    setBusy("Учитываю снятый лист…");
+    try {
+      const updated = await api.notesNextSheet({ thickness_mm: thickness,
+        profile_id: stack.profileId, fingerprint: stack.fingerprint });
+      setInfo(updated);
+      if (hadPreview) {
+        const result = await api.notesPreview(options);
+        setPreview(result); setPage(p => Math.min(p, result.pages.length - 1));
+      }
+      setMessage("Лист учтён. Проверь предпросмотр и снова подтверди готовность бумаги.");
       onAction();
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(""); }
@@ -132,6 +154,7 @@ export default function Notes({ visible, status, onAction, onSetup }: {
           <span className={info?.paperCalibrated ? "notes-ok" : "notes-missing"}>{info?.paperCalibrated ? "● Бумага откалибрована" : "○ Укажи положение бумаги"}</span>
           {!homed && <span className="notes-missing">○ Сними ручку и выполни поиск нуля</span>}
         </div>
+        <PaperStack info={info} disabled={!!busy || active} onRemove={removeSheet} />
         <label className="notes-confirm"><input type="checkbox" checked={paperReady}
           disabled={!!busy || active} onChange={e => setPaperReady(e.target.checked)} />Ручка установлена, чистый лист закреплён</label>
         <button className="primary notes-write" disabled={!sheet?.polylines.length || !ready || !paperReady || !!busy || active} onClick={write}>Написать лист {page + 1}</button>
