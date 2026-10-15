@@ -3,6 +3,14 @@ import { api } from "../../api";
 import type { NotesPreview, NotesStatus } from "../../api/client/notes";
 import Notes from "./Notes";
 
+function duration(seconds: number) {
+  const total = Math.round(seconds);
+  return total < 60 ? `${total} с` : `${Math.floor(total / 60)} мин ${total % 60} с`;
+}
+const metres = (mm: number) => `${(mm / 1000).toLocaleString("ru-RU", {
+  minimumFractionDigits: 2, maximumFractionDigits: 2,
+})} м`;
+
 export default function PhotoNotes(props: ComponentProps<typeof Notes>) {
   const { visible, status, onAction, onSetup } = props;
   const [manual, setManual] = useState(false);
@@ -21,6 +29,7 @@ export default function PhotoNotes(props: ComponentProps<typeof Notes>) {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [showSettings, setShowSettings] = useState(false);
+  const [showTravel, setShowTravel] = useState(false);
   const [key, setKey] = useState("");
   const [model, setModel] = useState("gpt-4.1-mini");
   const input = useRef<HTMLInputElement>(null);
@@ -114,7 +123,13 @@ export default function PhotoNotes(props: ComponentProps<typeof Notes>) {
     catch (e) { setError((e as Error).message); }
   };
   const sheet = preview?.pages[0];
+  const stats = sheet?.plotStats;
+  const optimization = sheet?.optimization;
   const d = sheet?.polylines.map(line => "M" + line.map(([x, y]) => `${x},${y}`).join("L")).join("") ?? "";
+  const travelD = sheet?.polylines.slice(1).map((line, i) => {
+    const prev = sheet.polylines[i];
+    return `M${prev[prev.length - 1].join(",")}L${line[0].join(",")}`;
+  }).join("") ?? "";
   const ready = connected && homed && info?.penCalibrated && info?.paperCalibrated;
 
   if (manual) return <>
@@ -177,9 +192,23 @@ export default function PhotoNotes(props: ComponentProps<typeof Notes>) {
           {sheet ? <svg viewBox={`0 0 ${sheet.width} ${sheet.height}`} aria-label="Предпросмотр SVG">
             <rect width={sheet.width} height={sheet.height} fill="#fffdf6" />
             <path d={d} fill="none" stroke="#253656" strokeWidth="0.3" strokeLinecap="round" strokeLinejoin="round" />
+            {showTravel && <path d={travelD} aria-label="Переходы с поднятой ручкой"
+              fill="none" stroke="#c65338" strokeWidth="0.15" strokeDasharray="1 1" />}
           </svg> : <div className="notes-empty"><span>✎</span><p>Здесь появится вся страница в линиях</p><small>Загрузи фото и нажми «Сделать SVG»</small></div>}
         </div>
         {svgUrl && <a className="btn-link" href={svgUrl} download="конспект.svg">Скачать SVG</a>}
+        {stats && <div className="notes-stats" aria-label="Расчёт записи SVG">
+          <p>Расчётное время: <strong>≈ {duration(stats.estimatedSeconds)}</strong></p>
+          {optimization && <>
+            <p>Подъёмы ручки: {`${optimization.beforeStrokes} → ${stats.penLifts}`}</p>
+            <p>Переходы без письма: {`${metres(optimization.beforeTravelMm)} → ${metres(optimization.afterTravelMm)}`}</p>
+          </>}
+          <p>Высота подъёма: {stats.penLiftMm.toLocaleString("ru-RU")} мм</p>
+          <small className="muted">Оценка учитывает движения XY и Z; реальное время зависит от принтера.</small>
+          {stats.penLiftMm > 5 && <p>Большая высота подъёма замедляет каждый штрих. <button onClick={onSetup}>Настроить высоту ручки</button></p>}
+        </div>}
+        {sheet && <label className="notes-confirm"><input type="checkbox" checked={showTravel}
+          onChange={e => setShowTravel(e.target.checked)} />Показать переходы ручки</label>}
         <div className="notes-readiness">
           <span className={connected ? "notes-ok" : "notes-missing"}>{connected ? "● USB подключён" : "○ Принтер не подключён"}</span>
           <span className={info?.penCalibrated ? "notes-ok" : "notes-missing"}>{info?.penCalibrated ? "● Ручка откалибрована" : "○ Установи и откалибруй ручку"}</span>

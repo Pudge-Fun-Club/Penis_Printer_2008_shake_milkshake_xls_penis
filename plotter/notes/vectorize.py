@@ -27,6 +27,7 @@ from plotter.notes import ocr
 from plotter.notes.guards import check_ink
 from plotter.notes.layout import _bounds, _render
 from plotter.notes.optimize import optimize_strokes
+from plotter.notes.print_plan import compact_gcode, ordered_page, plot_stats
 from plotter.notes.ruling import remove_ruling
 from plotter.services.errors import ServiceError
 from plotter.services.profiles import ProfileService, profile_meta
@@ -218,6 +219,7 @@ def preview(id: str, font: str = "original", margin: float = 5) -> dict:
                 "graphics": graphics,
                 "svg": svg,
                 "optimization": optimization,
+                "plotStats": plot_stats(optimized, cal),
             }
         ],
         "profile": profile_meta(profile),
@@ -245,14 +247,7 @@ def jobs(id: str, font: str = "original", margin: float = 5) -> dict:
     # reorder paths or bridge small intentional gaps between characters.
     drawing = load_svg_drawing(source_svg, quantization_mm=0.01, merge=False)
     printable = [[[float(p.real), float(p.imag)] for p in line] for line in drawing.polylines]
-    page = {
-        "id": id,
-        "name": name,
-        "continuous": False,
-        "objects": [
-            {"cachedPolylines": printable, "cachedFeeds": [[1.0] * len(line) for line in printable]}
-        ],
-    }
+    page = ordered_page(printable, id=id, name=name)
     path = save_scene_job(
         page,
         cal,
@@ -260,6 +255,7 @@ def jobs(id: str, font: str = "original", margin: float = 5) -> dict:
         source_kind="notebook",
         source_extra={"vector_id": id, "font": font, "format": "svg"},
     )
+    path.write_text(compact_gcode(path.read_text()))
     path.with_suffix(".svg").write_text(sheet["svg"])
     result["jobs"] = [{"number": 1, "filename": path.name}]
     return result

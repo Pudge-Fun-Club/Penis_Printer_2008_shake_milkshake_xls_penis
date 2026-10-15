@@ -66,3 +66,20 @@ it("requires review again if printing profile changes", async () => {
   await screen.findByRole("alert");
   expect(mocks.send).not.toHaveBeenCalled();
 });
+
+it("shows print time, lifts and travel and can reveal pen-up routes", async () => {
+  mocks.notesVectorPreview.mockResolvedValue({ ...preview, pages: [{ ...sheet,
+    polylines: [[[5, 5], [8, 8]], [[12, 12], [15, 15]]],
+    optimization: { beforeStrokes: 740, afterStrokes: 111,
+      beforeTravelMm: 23928.4, afterTravelMm: 698.2, beforePoints: 7106, afterPoints: 3740 },
+    plotStats: { estimatedSeconds: 247, penLifts: 111, drawMm: 1920,
+      travelMm: 698, penLiftMm: 3 },
+  }] });
+  app();
+  await vectorize();
+  expect(screen.getByText(/4 мин 7 с/)).toBeTruthy();
+  expect(screen.getByText(/740 → 111/)).toBeTruthy();
+  expect(screen.getByText(/23,93 м → 0,70 м/)).toBeTruthy();
+  fireEvent.click(screen.getByLabelText("Показать переходы ручки"));
+  expect(screen.getByLabelText("Переходы с поднятой ручкой").getAttribute("d")).toContain("M8,8L12,12");
+});

@@ -141,6 +141,30 @@ The user's deployed app is on a different computer; publishing the fix does not
 update that running installation. Pull/rebuild/restart there before using the new
 Control → USB / Serial → Connect via USB action.
 
+### Task 10: Finish fast SVG output and expose actual job estimates
+
+- [x] Minimize repeated ink distance with weighted open-postman matching;
+      use bounded weighted pairing for components with more than 40 odd nodes.
+- [x] Choose pen lifts versus retracing per connected component using current
+      draw/travel/Z settings; choose entry points on closed contours.
+- [x] Remove redundant modal feed words while preserving all motion and speed
+      changes; calculate preview time and distance from the emitted G-code.
+- [x] Show estimated time, lift count, travel distance and current lift height;
+      allow viewing pen-up travel without exporting it as ink.
+- [x] Cover weighted branches, mixed components, closed contours, large odd-node
+      sets, deterministic output, modal speeds and preview/job metric agreement.
+- [x] Verify the same user page at identical calibration: previous optimized
+      job 102081 → 69400 bytes, 3966 → 3389 commands, 1920.2 → 1669.6 mm ink
+      motion, estimated 446.2 → 398.1 seconds. Maximum ink deviation is 0.02 mm.
+- [x] Full verification: 711 backend tests, 128 frontend tests, production build,
+      Ruff and diff checks passed. Browser upload, SVG download and travel
+      overlay verified using an isolated server with serial disabled.
+
+Benchmarks and screenshots are in data/preview/fast-svg-*. No physical printing
+or calibration changes were performed. Estimates include the current profile;
+they are not measured printer timings. Pull/rebuild/restart the deployment on
+the other computer and regenerate the SVG/job to use this route.
+
 ## Execution Record
 
 - User requested immediate work; implement in the supplied directory on feat/notebook-plotter.

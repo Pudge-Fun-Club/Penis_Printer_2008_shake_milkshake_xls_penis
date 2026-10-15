@@ -23,6 +23,15 @@ export interface NotesSheet {
   height: number;
   polylines: number[][][];
   svg?: string;
+  optimization?: {
+    beforeStrokes: number; afterStrokes: number;
+    beforeTravelMm: number; afterTravelMm: number;
+    beforePoints: number; afterPoints: number;
+  };
+  plotStats?: {
+    estimatedSeconds: number; penLifts: number;
+    drawMm: number; travelMm: number; penLiftMm: number;
+  };
 }
 export interface NotesPreview {
   pages: NotesSheet[];
