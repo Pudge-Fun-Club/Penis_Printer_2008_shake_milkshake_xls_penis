@@ -13,7 +13,7 @@ from plotter.gcode.safety import GcodeSafetyChecker, SafetyViolation
 from plotter.notes.guards import paper_applied
 from plotter.web.deps import printer_controller, profile_service
 
-from ...printer.manager import BackendBusyError, BackendUnavailableError
+from ...printer.manager import BackendBusyError, BackendUnavailableError, PrinterManager
 from ...services import PrinterController
 from ...services.profiles import profile_meta
 
@@ -100,7 +100,12 @@ def set_backend(req: BackendSelect) -> dict:
     if not callable(set_active):
         raise HTTPException(400, "Backend-Umschaltung nicht verfügbar")
     try:
-        set_active(req.id)
+        if req.id == "serial" and isinstance(client, PrinterManager):
+            from ...printer.factory import activate_serial
+
+            activate_serial(client)
+        else:
+            set_active(req.id)
     except BackendBusyError as exc:
         raise HTTPException(409, str(exc)) from exc
     except BackendUnavailableError as exc:

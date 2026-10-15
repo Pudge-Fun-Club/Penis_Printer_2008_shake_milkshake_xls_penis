@@ -77,6 +77,15 @@ class PrinterManager:
                 f"backend not configured: {self._active}"
             ) from exc
 
+    def register_backend(self, backend_id: str, backend: PrinterBackend) -> None:
+        """Configure an inactive connection option without touching its hardware."""
+        with self._lock:
+            if backend_id == self._active:
+                return
+            if self._job_active():
+                raise BackendBusyError("cannot switch backend while a job is running")
+            self._backends[backend_id] = backend
+
     def set_active(self, backend_id: str) -> None:
         with self._lock:
             if backend_id not in self._backends:
@@ -106,7 +115,9 @@ class PrinterManager:
     def backends(self) -> list[dict]:
         """Selector payload: id, configured, online, active per backend."""
         out: list[dict] = []
-        for bid, backend in self._backends.items():
+        with self._lock:
+            candidates = list(self._backends.items())
+        for bid, backend in candidates:
             st = backend.status()
             out.append(
                 {

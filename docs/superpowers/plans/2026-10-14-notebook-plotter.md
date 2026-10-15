@@ -122,6 +122,25 @@ disconnect/reset scenarios are covered by controlled serial transports.
       changed-file Ruff and diff checks passed; focused auth review found no
       critical or important issues.
 
+### Task 9: USB selection in a normal installation on another computer
+
+- [x] Reproduce Control showing only Offline and OctoPrint environment hints
+      with USB disabled in the default launch.
+- [x] Always show an actionable USB card; enable/select it without restarting.
+- [x] Persist selection and use saved port/baud/enable settings at startup.
+- [x] Replace an inactive legacy serial client before applying auto discovery;
+      keep an already active USB connection open on repeated selection.
+- [x] Preserve busy-job protection, passive discovery and known-position reset.
+- [x] Surface selection failures and explain that USB belongs to the server host.
+- [x] Verify 705 backend tests, 127 frontend tests, production build, Ruff and
+      diff checks. Browser verification uses an isolated default installation
+      and a guaranteed nonexistent port: button selects USB and the UI stops
+      asking for OctoPrint keys. No physical motion or real device open performed.
+
+The user's deployed app is on a different computer; publishing the fix does not
+update that running installation. Pull/rebuild/restart there before using the new
+Control → USB / Serial → Connect via USB action.
+
 ## Execution Record
 
 - User requested immediate work; implement in the supplied directory on feat/notebook-plotter.

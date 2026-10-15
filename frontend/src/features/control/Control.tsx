@@ -11,6 +11,7 @@ function PrinterOverview({ status, onAction }: { status: any; onAction: () => vo
   const { t } = useI18n();
   const [backends, setBackends] = useState<Backend[]>([]);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
   const load = () => api.listBackends().then(setBackends).catch(() => {});
   useEffect(() => {
@@ -19,8 +20,10 @@ function PrinterOverview({ status, onAction }: { status: any; onAction: () => vo
     return () => clearInterval(id);
   }, []);
 
-  const configured = backends.filter((b) => b.configured);
-  if (configured.length === 0) return null;
+  const configured = backends.filter(b => b.configured || b.id === "serial");
+  if (!configured.some(b => b.id === "serial")) {
+    configured.push({ id: "serial", configured: false, online: false, active: false });
+  }
 
   const job = status?.job;
   const jobRunning = ["printing", "paused"].some((s) =>
@@ -29,6 +32,7 @@ function PrinterOverview({ status, onAction }: { status: any; onAction: () => vo
 
   const activate = (id: string) => {
     if (busy) return;
+    setError("");
     setBusy(true);
     api
       .setBackend(id)
@@ -36,12 +40,13 @@ function PrinterOverview({ status, onAction }: { status: any; onAction: () => vo
         load();
         onAction();
       })
-      .catch(() => {})
+      .catch(e => setError(String(e.message ?? e)))
       .finally(() => setBusy(false));
   };
 
   // Live activity is only known for the active backend (single-active model).
   const activity = (b: Backend): string => {
+    if (!b.online) return t("printer.state.offline");
     if (!b.active) return b.online ? t("printer.state.ready") : t("printer.state.offline");
     const state = job?.state?.toLowerCase?.() ?? "";
     if (state.includes("printing")) {
@@ -76,12 +81,13 @@ function PrinterOverview({ status, onAction }: { status: any; onAction: () => vo
                 title={jobRunning ? t("printer.switchBlocked") : ""}
                 onClick={() => activate(b.id)}
               >
-                {t("printer.activate")}
+                {t(b.id === "serial" ? "printer.connectUsb" : "printer.activate")}
               </button>
             )}
           </div>
         ))}
       </div>
+      {error && <p className="banner err" role="alert">{error}</p>}
     </div>
   );
 }
@@ -192,14 +198,12 @@ export default function Control({
           <>
             <p className="muted">
               {t("control.offlineHintSerial")}
-              <code> PRINTER_SERIAL_PORT</code>.
             </p>
             <SerialPortHint />
           </>
         ) : (
           <p className="muted">
             {t("control.offlineHint")}
-            <code> OCTOPRINT_URL</code> {t("common.and")} <code>OCTOPRINT_API_KEY</code>.
           </p>
         )}
       </div>

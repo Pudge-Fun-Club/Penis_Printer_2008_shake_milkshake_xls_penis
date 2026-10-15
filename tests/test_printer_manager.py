@@ -175,7 +175,7 @@ def test_backends_endpoint_default(client):
 
 
 def test_set_backend_unconfigured_returns_400(client):
-    r = client.post("/api/printer/backend", json={"id": SERIAL})
+    r = client.post("/api/printer/backend", json={"id": "missing"})
     assert r.status_code == 400
 
 
