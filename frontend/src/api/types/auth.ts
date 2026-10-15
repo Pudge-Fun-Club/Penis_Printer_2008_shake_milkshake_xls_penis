@@ -4,13 +4,6 @@ export interface AuthSession {
   username: string | null;
 }
 
-export interface AuthSetupStart {
-  setupId: string;
-  totpSecret: string;
-  otpauthUri: string;
-}
-
-export interface AuthSetupFinish {
+export interface AuthLoginResult {
   expires: number;
-  recoveryCodes: string[];
 }

@@ -9,8 +9,6 @@ export default function LoginForm({ username: initialUsername, onDone }: { usern
   const toast = useToasts();
   const [username, setUsername] = useState(initialUsername);
   const [password, setPassword] = useState("");
-  const [code, setCode] = useState("");
-  const [useRecovery, setUseRecovery] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -18,7 +16,7 @@ export default function LoginForm({ username: initialUsername, onDone }: { usern
     setBusy(true);
     setErr(null);
     api
-      .authLogin(username, password, useRecovery ? "" : code, useRecovery ? code : "")
+      .authLogin(username, password)
       .then(onDone)
       .catch((e) => setErr(String(e.message ?? e)))
       .finally(() => setBusy(false));
@@ -31,13 +29,11 @@ export default function LoginForm({ username: initialUsername, onDone }: { usern
   return (
     <AuthShell>
       <h2>{t("auth.loginTitle")}</h2>
-      <div className="auth-form">
-        <label>{t("auth.username")}<input value={username} onChange={(e) => setUsername(e.target.value)} /></label>
-        <label>{t("auth.password")}<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
-        <label>{useRecovery ? t("auth.recoveryCode") : t("auth.totpCode")}<input inputMode="numeric" value={code} onChange={(e) => setCode(e.target.value)} /></label>
-        <label className="checkline"><input type="checkbox" checked={useRecovery} onChange={(e) => setUseRecovery(e.target.checked)} />{t("auth.useRecovery")}</label>
-        <button className="primary" disabled={busy} onClick={submit}>{t("auth.login")}</button>
-      </div>
+      <form className="auth-form" onSubmit={e => { e.preventDefault(); if (!busy) submit(); }}>
+        <label>{t("auth.username")}<input autoComplete="username" required value={username} onChange={e => setUsername(e.target.value)} /></label>
+        <label>{t("auth.password")}<input type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} /></label>
+        <button className="primary" disabled={busy} type="submit">{t("auth.login")}</button>
+      </form>
     </AuthShell>
   );
 }

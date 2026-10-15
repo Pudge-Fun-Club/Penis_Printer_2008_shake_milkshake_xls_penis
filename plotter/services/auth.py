@@ -7,7 +7,6 @@ import secrets
 import threading
 from pathlib import Path
 
-import pyotp
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 
@@ -47,19 +46,8 @@ def _key(prefix: str, token: str) -> str:
     return f"auth_{prefix}_{digest}"
 
 
-def _recovery_hash(code: str) -> str:
-    normalized = code.strip().upper().replace(" ", "")
-    return "sha256:" + hashlib.sha256(normalized.encode("utf-8")).hexdigest()
-
-
-def _new_recovery_codes(count: int = 8) -> list[str]:
-    return [secrets.token_hex(4).upper() for _ in range(count)]
-
-
 class AuthService:
-    """Single-admin username/password/TOTP auth store."""
-
-    SETUP_TTL_SECONDS = 15 * 60
+    """Single-admin username/password authentication and session store."""
 
     def __init__(self, root: Path | None = None):
         self.root = root or (data_dir() / "auth")
@@ -77,7 +65,7 @@ class AuthService:
             "username": admin.get("username") if admin else None,
         }
 
-    def start_setup(self, username: str, password: str) -> dict:
+    def setup(self, username: str, password: str) -> dict:
         username = username.strip()
         if self.configured():
             raise AuthConflict("Admin ist bereits eingerichtet.")
@@ -85,36 +73,9 @@ class AuthService:
             raise AuthError("Benutzername fehlt.")
         if len(password) < 10:
             raise AuthError("Passwort muss mindestens 10 Zeichen lang sein.")
-        secret = pyotp.random_base32()
-        setup_id = secrets.token_urlsafe(32)
-        payload = {
+        admin = {
             "username": username,
             "password_hash": _hasher.hash(password),
-            "totp_secret": secret,
-            "created": now(),
-            "expires": now() + self.SETUP_TTL_SECONDS,
-        }
-        _state().set(_key("setup", setup_id), payload)
-        return {
-            "setupId": setup_id,
-            "totpSecret": secret,
-            "otpauthUri": self._totp_uri(username, secret),
-        }
-
-    def finish_setup(self, setup_id: str, code: str) -> dict:
-        if self.configured():
-            raise AuthConflict("Admin ist bereits eingerichtet.")
-        pending = _state().get(_key("setup", setup_id)) if setup_id else None
-        if not pending or pending.get("expires", 0) < now():
-            raise AuthError("Setup ist abgelaufen. Bitte neu starten.")
-        if not self._verify_totp(pending["totp_secret"], code):
-            raise AuthError("TOTP-Code ist ungültig.")
-        recovery_codes = _new_recovery_codes()
-        admin = {
-            "username": pending["username"],
-            "password_hash": pending["password_hash"],
-            "totp_secret": pending["totp_secret"],
-            "recovery_code_hashes": [_recovery_hash(code) for code in recovery_codes],
             "created": now(),
             "modified": now(),
         }
@@ -123,14 +84,12 @@ class AuthService:
                 raise AuthConflict("Admin ist bereits eingerichtet.")
             atomic_write_json(self.path, admin)
         token, expires = self.create_session(admin["username"])
-        return {"token": token, "expires": expires, "recoveryCodes": recovery_codes}
+        return {"token": token, "expires": expires}
 
     def login(
         self,
         username: str,
         password: str,
-        totp_code: str | None = None,
-        recovery_code: str | None = None,
     ) -> dict:
         admin = self._require_admin()
         if username.strip() != admin.get("username"):
@@ -141,10 +100,12 @@ class AuthService:
             ok = False
         if not ok:
             raise AuthError("Login fehlgeschlagen.")
-        if recovery_code:
-            self._consume_recovery_code(admin, recovery_code)
-        elif not self._verify_totp(admin["totp_secret"], totp_code or ""):
-            raise AuthError("TOTP-Code ist ungültig.")
+        # Existing accounts keep their password and sessions. Remove obsolete
+        # second-factor material only after a successful password check.
+        if "totp_secret" in admin or "recovery_code_hashes" in admin:
+            admin.pop("totp_secret", None)
+            admin.pop("recovery_code_hashes", None)
+            self._write_admin(admin)
         token, expires = self.create_session(admin["username"])
         return {"token": token, "expires": expires}
 
@@ -188,22 +149,6 @@ class AuthService:
     def _write_admin(self, admin: dict) -> None:
         admin["modified"] = now()
         atomic_write_json(self.path, admin)
-
-    def _totp_uri(self, username: str, secret: str) -> str:
-        return pyotp.TOTP(secret).provisioning_uri(name=username, issuer_name="GCodeScribe")
-
-    def _verify_totp(self, secret: str, code: str) -> bool:
-        return pyotp.TOTP(secret).verify(code.strip().replace(" ", ""), valid_window=1)
-
-    def _consume_recovery_code(self, admin: dict, code: str) -> None:
-        digest = _recovery_hash(code)
-        hashes = list(admin.get("recovery_code_hashes") or [])
-        if digest not in hashes:
-            raise AuthError("Recovery-Code ist ungültig.")
-        hashes.remove(digest)
-        admin["recovery_code_hashes"] = hashes
-        self._write_admin(admin)
-
 
 def session_ttl_seconds() -> int:
     raw = os.environ.get("PLOTTER_AUTH_SESSION_TTL", str(14 * 24 * 60 * 60))

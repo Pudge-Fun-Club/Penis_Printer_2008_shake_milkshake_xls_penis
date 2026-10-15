@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import pyotp
+import json
 from fastapi.testclient import TestClient
 
 from plotter.services.auth import AuthService
@@ -16,14 +16,10 @@ def setup_admin(
     c: TestClient,
     username: str = "admin",
     password: str = "supersecret12",
-) -> list[str]:
-    start = c.post("/api/auth/setup/start", json={"username": username, "password": password})
-    assert start.status_code == 200
-    data = start.json()
-    code = pyotp.TOTP(data["totpSecret"]).now()
-    finish = c.post("/api/auth/setup/finish", json={"setupId": data["setupId"], "code": code})
-    assert finish.status_code == 200
-    return finish.json()["recoveryCodes"]
+) -> dict:
+    response = c.post("/api/auth/setup", json={"username": username, "password": password})
+    assert response.status_code == 200
+    return response.json()
 
 
 class TestAuthSetup:
@@ -37,19 +33,27 @@ class TestAuthSetup:
 
     def test_setup_creates_admin_and_session(self, workspace, monkeypatch):
         c = client(workspace, monkeypatch)
-        recovery = setup_admin(c)
-        assert len(recovery) == 8
+        result = setup_admin(c)
+        assert set(result) == {"expires"}
+        assert result["expires"] > 0
         session = c.get("/api/auth/session").json()
         assert session["configured"] is True
         assert session["authenticated"] is True
         assert session["username"] == "admin"
         assert (workspace / "auth" / "admin.json").exists()
+        assert c.get("/api/jobs").status_code == 200
 
     def test_second_setup_is_rejected(self, workspace, monkeypatch):
         c = client(workspace, monkeypatch)
         setup_admin(c)
-        r = c.post("/api/auth/setup/start", json={"username": "x", "password": "supersecret12"})
+        r = c.post("/api/auth/setup", json={"username": "x", "password": "supersecret12"})
         assert r.status_code == 409
+
+    def test_setup_rejects_weak_password(self, workspace, monkeypatch):
+        c = client(workspace, monkeypatch)
+        response = c.post("/api/auth/setup", json={"username": "admin", "password": "short"})
+        assert response.status_code == 401
+        assert not (workspace / "auth" / "admin.json").exists()
 
 
 class TestAuthLogin:
@@ -69,37 +73,53 @@ class TestAuthLogin:
         c = client(workspace, monkeypatch)
         assert c.get("/api/jobs").status_code == 401
 
-    def test_login_with_totp_allows_protected_route(self, workspace, monkeypatch):
+    def test_password_alone_allows_protected_route(self, workspace, monkeypatch):
         c = client(workspace, monkeypatch)
         setup_admin(c)
         c.post("/api/auth/logout")
-        secret = AuthService()._read_admin()["totp_secret"]
         r = c.post(
             "/api/auth/login",
             json={
                 "username": "admin",
                 "password": "supersecret12",
-                "totpCode": pyotp.TOTP(secret).now(),
             },
         )
         assert r.status_code == 200
         assert c.get("/api/jobs").status_code == 200
 
-    def test_login_with_recovery_code_consumes_code(self, workspace, monkeypatch):
+    def test_existing_2fa_account_logs_in_without_code(self, workspace, monkeypatch):
         c = client(workspace, monkeypatch)
-        recovery = setup_admin(c)
+        setup_admin(c)
+        service = AuthService()
+        admin = service._read_admin()
+        admin.update(totp_secret="LEGACY-TOTP-SECRET", recovery_code_hashes=["old-hash"])
+        service.path.write_text(json.dumps(admin))
         c.post("/api/auth/logout")
         r = c.post(
             "/api/auth/login",
-            json={"username": "admin", "password": "supersecret12", "recoveryCode": recovery[0]},
+            json={"username": "admin", "password": "supersecret12"},
         )
         assert r.status_code == 200
+        assert c.get("/api/jobs").status_code == 200
+        assert "totp_secret" not in service._read_admin()
+        assert "recovery_code_hashes" not in service._read_admin()
+
+    def test_wrong_password_stays_rejected(self, workspace, monkeypatch):
+        c = client(workspace, monkeypatch)
+        setup_admin(c)
         c.post("/api/auth/logout")
-        again = c.post(
+        response = c.post(
             "/api/auth/login",
-            json={"username": "admin", "password": "supersecret12", "recoveryCode": recovery[0]},
+            json={"username": "admin", "password": "wrong-password"},
         )
-        assert again.status_code == 401
+        assert response.status_code == 401
+        assert c.get("/api/jobs").status_code == 401
+
+    def test_logout_invalidates_session(self, workspace, monkeypatch):
+        c = client(workspace, monkeypatch)
+        setup_admin(c)
+        c.post("/api/auth/logout")
+        assert c.get("/api/jobs").status_code == 401
 
     def test_gallery_upload_stays_public(self, workspace, cal, monkeypatch):
         monkeypatch.setenv("GALLERY_UPLOAD_ENABLED", "1")
