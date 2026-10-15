@@ -150,6 +150,7 @@ class AuthService:
         admin["modified"] = now()
         atomic_write_json(self.path, admin)
 
+
 def session_ttl_seconds() -> int:
     raw = os.environ.get("PLOTTER_AUTH_SESSION_TTL", str(14 * 24 * 60 * 60))
     try:

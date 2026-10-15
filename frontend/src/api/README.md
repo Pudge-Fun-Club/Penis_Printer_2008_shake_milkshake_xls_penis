@@ -8,7 +8,7 @@ paths continue to work without change.
 ```
 api/
 ├── types/               TypeScript interface definitions, no runtime code
-│   ├── auth.ts          AuthSession, AuthSetupStart, AuthSetupFinish
+│   ├── auth.ts          AuthSession, AuthLoginResult
 │   ├── calibration.ts   Obstacle, Calibration, CalibrationProfile*, ProfileRef, JobProfileStatus
 │   ├── sources.ts       SourcePage, Source, SourcePreview
 │   ├── gallery.ts       GalleryScore, GalleryItem, GallerySvg, GalleryPreview, …

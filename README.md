@@ -223,10 +223,11 @@ docker run --rm -p 8000:8000 \
 With Compose, add the serial device to the app service and set the same
 `PRINTER_SERIAL_*` values in `.env`.
 
-On first opening the admin app, create the local admin account and enroll a
-TOTP authenticator. The public `/upload` page stays available without login;
+On first opening the admin app, create the local admin account with a username
+and password. Existing accounts sign in with their current password. The public
+`/upload` page stays available without login;
 the normal app and API are protected by the admin session. Plain HTTP works for
-local/LAN use, but passwords, TOTP codes and session cookies can be observed on
+local/LAN use, but passwords and session cookies can be observed on
 the network; use HTTPS if the controller is exposed beyond a trusted setup.
 
 > PDF support works out of the box (`poppler-utils` provides `pdftocairo`,

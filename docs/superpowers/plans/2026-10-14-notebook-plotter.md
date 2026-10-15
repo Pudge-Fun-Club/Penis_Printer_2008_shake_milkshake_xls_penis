@@ -100,6 +100,28 @@ No physical restart was initiated by the agent. Connection restoration was
 observed on the actual USB device after the user applied the permissions rule;
 disconnect/reset scenarios are covered by controlled serial transports.
 
+### Task 7: Reduce unnecessary SVG and printer travel
+
+- [x] Reproduce long capture-order routes, excess lifts and redundant vertices.
+- [x] Use exact-connectivity Euler trails, nearest-end ordering and 2-opt;
+      compare draw/travel/lift time against the original and sorted routes.
+- [x] Simplify within 0.02 mm while preserving small closed marks and dots.
+- [x] Preserve the reviewed SVG path order during SVG import and G-code emission.
+- [x] Verify the user's page: 740 → 111 strokes, 23928.4 → 698.2 mm pen-up
+      travel, 7106 → 3740 vertices; measured maximum ink deviation 0.02 mm.
+
+### Task 8: Remove two-factor authentication
+
+- [x] Replace enrolment with single-step username/password admin setup.
+- [x] Allow existing accounts to log in with their original password; remove
+      obsolete second-factor data after successful password verification.
+- [x] Remove code/recovery forms, obsolete translations, styles and pyotp.
+- [x] Verify password-only setup/login, old accounts, wrong passwords, logout,
+      protected routes and real auth gate/API client interaction.
+- [x] Full verification: 701 backend tests, 125 frontend tests, production build,
+      changed-file Ruff and diff checks passed; focused auth review found no
+      critical or important issues.
+
 ## Execution Record
 
 - User requested immediate work; implement in the supplied directory on feat/notebook-plotter.
