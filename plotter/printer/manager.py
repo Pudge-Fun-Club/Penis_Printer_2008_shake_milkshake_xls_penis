@@ -157,6 +157,10 @@ class PrinterManager:
     def home(self, axes: list[str] | None = None) -> None:
         self.active().home(axes)
 
+    def query_position(self) -> dict[str, float] | None:
+        query = getattr(self.active(), "query_position", None)
+        return query() if callable(query) else None
+
     def jog(
         self, x: float = 0.0, y: float = 0.0, z: float = 0.0, speed: int | None = None
     ) -> None:

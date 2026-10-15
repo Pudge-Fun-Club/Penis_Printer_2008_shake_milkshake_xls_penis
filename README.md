@@ -1,5 +1,10 @@
 # GCodeScribe
 
+Для подключённого **Ender-3 Neo** добавлен экран **Конспекты**: фото →
+SVG со всеми рисунками и формулами → выбор почерка → запись на бумагу.
+Запуск: `./scripts/run-notes.sh`, затем <http://127.0.0.1:8010>.
+[Установка ручки и первая калибровка на русском](docs/PLOTTER_RU.md).
+
 A browser-based pen-plotter studio for turning PDF, SVG, image, Office and STL
 files — plus generated templates, city maps, Markdown layouts, handwriting
 fonts, and optional AI-assisted artwork — into safe G-code for an **Anycubic i3

@@ -56,12 +56,13 @@ class GcodeSafetyChecker:
     def __init__(self, cal: Calibration):
         self.cal = cal
 
-    def check(self, gcode: str, name: str = "G-code") -> None:
+    def check(self, gcode: str, name: str = "G-code", *,
+              initial_xy: tuple[float, float] = (0.0, 0.0)) -> None:
         cal = self.cal
         tol = self.TOL
         px0, py0 = cal.origin_x, cal.origin_y
         px1, py1 = px0 + cal.plot_width, py0 + cal.plot_height
-        x = y = 0.0
+        x, y = initial_xy
         z: float | None = None  # unknown until the job lifts the pen
 
         def fail(line_no: int, line: str, why: str) -> None:

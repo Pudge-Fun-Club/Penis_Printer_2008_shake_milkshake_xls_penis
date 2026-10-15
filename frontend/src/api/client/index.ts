@@ -11,6 +11,7 @@ import { strokeFontsClient } from "./strokeFonts";
 import { gamesClient } from "./games";
 import { aiClient } from "./ai";
 import { settingsClient } from "./settings";
+import { notesClient } from "./notes";
 
 export const api = {
   ...authClient,
@@ -26,4 +27,5 @@ export const api = {
   ...gamesClient,
   ...aiClient,
   ...settingsClient,
+  ...notesClient,
 };

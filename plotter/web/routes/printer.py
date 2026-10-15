@@ -10,6 +10,7 @@ from plotter.core.calibration import Calibration
 from plotter.core.jobmeta import job_profile_status, read_job_meta_checked
 from plotter.core.storage import jobs_dir
 from plotter.gcode.safety import GcodeSafetyChecker, SafetyViolation
+from plotter.notes.guards import paper_applied
 from plotter.web.deps import printer_controller, profile_service
 
 from ...printer.manager import BackendBusyError, BackendUnavailableError
@@ -197,7 +198,33 @@ def octo_send(req: PrintRequest) -> dict:
     except SafetyViolation as exc:
         log.warning("Print blocked (safety): %s — %s", path.name, exc)
         raise
-    if req.start:
+    meta, _ = read_job_meta_checked(path)
+    notebook = ((meta or {}).get("source") or {}).get("kind") == "notebook"
+    if notebook:
+        # A pen projecting below the nozzle must not be present during G28.
+        # Home during setup, install the pen, calibrate, then keep that position.
+        st = ctrl.status()
+        state = str((st.get("job") or {}).get("state", "")).lower()
+        if "printing" in state or "paused" in state:
+            raise HTTPException(409, "Принтер уже выполняет задание. Дождитесь завершения.")
+        if not st.get("online"):
+            raise HTTPException(409, "Принтер не подключён.")
+        if not cal.pen_calibrated or cal.pen_up_z <= cal.pen_down_z:
+            raise HTTPException(409, "Сначала установите ручку и откалибруйте её высоту.")
+        if not paper_applied(cal):
+            raise HTTPException(409, "Сначала откалибруйте положение листа бумаги.")
+        if not ctrl.tracker.homed:
+            raise HTTPException(409, "Позиция неизвестна. Снимите ручку и выполните поиск нуля.")
+        if req.start:
+            query = getattr(ctrl.client, "query_position", None)
+            actual = query() if callable(query) else None
+            if isinstance(actual, dict):
+                ctrl.tracker.set_axes(**{a: actual[a] for a in ("x", "y", "z")})
+            position = ctrl.position()
+            GcodeSafetyChecker(cal).check(path.read_text(), name=req.filename,
+                                          initial_xy=(position["x"], position["y"]))
+            ctrl.client.gcode(["M104 S0", "M140 S0", "M107"])
+    elif req.start:
         ctrl.home()
     return ctrl.client.upload(path, start=req.start)
 
@@ -211,6 +238,13 @@ class JobCommand(BaseModel):
 def octo_job(req: JobCommand) -> dict:
     ctrl = controller()
     if req.command in ("start", "restart"):
+        st = ctrl.status()
+        filename = (((st.get("job") or {}).get("job") or {}).get("file") or {}).get("name")
+        if filename:
+            path = jobs_dir() / Path(filename).name
+            meta, _ = read_job_meta_checked(path)
+            if ((meta or {}).get("source") or {}).get("kind") == "notebook":
+                return octo_send(PrintRequest(filename=filename, start=True))
         ctrl.home()
     ctrl.client.job_command(req.command)
     return {"ok": True}

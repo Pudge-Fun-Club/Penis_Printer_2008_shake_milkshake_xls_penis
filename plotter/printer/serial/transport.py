@@ -18,6 +18,9 @@ BANNER_TIMEOUT = 12.0
 BANNER_QUIET = 1.5
 # Backoff between reconnect attempts so a missing printer doesn't spin the CPU.
 RECONNECT_DELAY = 3.0
+# Detect unplugged/restarted boards even when no job or manual command is sent.
+HEARTBEAT_INTERVAL = 3.0
+HEARTBEAT_TIMEOUT = 5.0
 
 # Job states.
 IDLE = "idle"

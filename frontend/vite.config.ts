@@ -13,6 +13,11 @@ export default defineConfig({
   },
   test: {
     setupFiles: ["src/test/setup.ts"],
+    // Node's experimental storage globals mask jsdom's browser storage.
+    poolOptions: {
+      forks: { execArgv: Number(process.versions.node.split(".")[0]) >= 22
+        ? ["--no-experimental-webstorage"] : [] },
+    },
   },
   server: {
     proxy: {

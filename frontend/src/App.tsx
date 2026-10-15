@@ -15,8 +15,9 @@ import Segmented from "./components/Segmented";
 import SettingsDialog from "./features/settings/SettingsDialog";
 import { useToasts } from "./components/Toasts";
 import { useI18n } from "./i18n";
+import PhotoNotes from "./features/notes/PhotoNotes";
 
-type Tab = "paint" | "games" | "gallery" | "ai" | "convert" | "paper" | "calibrate" | "control" | "font";
+type Tab = "notes" | "paint" | "games" | "gallery" | "ai" | "convert" | "paper" | "calibrate" | "control" | "font";
 
 export default function App() {
   return (
@@ -29,15 +30,15 @@ export default function App() {
 // Heavy, stateful tabs: mount once on first visit and keep them alive (hidden)
 // so switching back is instant instead of refetching + rebuilding the canvas.
 // The lighter list/state tabs stay unmount-on-switch so they reflect fresh data.
-const KEEP_ALIVE: Tab[] = ["paint", "games", "gallery", "ai", "convert", "paper", "calibrate", "font"];
+const KEEP_ALIVE: Tab[] = ["notes", "paint", "games", "gallery", "ai", "convert", "paper", "calibrate", "font"];
 const PLOT_PROGRESS_THRESHOLDS = [25, 50, 90, 100];
 
 function AdminApp() {
   const { lang, setLang, t } = useI18n();
   const toast = useToasts();
-  const [tab, setTab] = useState<Tab>("paint");
+  const [tab, setTab] = useState<Tab>("notes");
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [visited, setVisited] = useState<Set<Tab>>(() => new Set<Tab>(["paint"]));
+  const [visited, setVisited] = useState<Set<Tab>>(() => new Set<Tab>(["notes"]));
   const [status, setStatus] = useState<any>(null);
   const [aiStatus, setAiStatus] = useState<AiImageStatus | null>(null);
   const [aiInitialFile, setAiInitialFile] = useState<File | null>(null);
@@ -170,6 +171,7 @@ function AdminApp() {
   };
 
   const tabs: { value: Tab; label: string }[] = [
+    { value: "notes", label: "Конспекты" },
     { value: "paint", label: t("tabs.paint") },
     ...(aiStatus?.enabled ? [{ value: "ai" as Tab, label: t("tabs.ai") }] : []),
     { value: "games", label: t("tabs.games") },
@@ -232,6 +234,7 @@ function AdminApp() {
         {KEEP_ALIVE.map((value) =>
           visited.has(value) ? (
             <div key={value} style={{ display: tab === value ? "contents" : "none" }}>
+              {value === "notes" && <PhotoNotes visible={tab === "notes"} status={status} onAction={refreshStatus} onSetup={() => setTab("paper")} />}
               {value === "paint" && <Paint visible={tab === "paint"} status={status} onAction={refreshStatus} desktop={desktop} />}
               {value === "games" && <Games visible={tab === "games"} onOpenPaint={() => setTab("paint")} desktop={desktop} />}
               {value === "gallery" && <Gallery visible={tab === "gallery"} onOpenPaint={() => setTab("paint")} onOpenAiDesigner={aiStatus?.enabled ? openInAiDesigner : undefined} aiEnabled={aiStatus?.enabled ?? false} desktop={desktop} />}

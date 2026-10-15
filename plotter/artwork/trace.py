@@ -223,7 +223,7 @@ def _skeleton_to_polylines(sk: np.ndarray) -> list[list[tuple[int, int]]]:
 
 
 def _centerline_paths(
-    image_path: Path, dpi: float, detail: int
+    image_path: Path, dpi: float, detail: int, *, preserve_dots: bool = False
 ) -> tuple[list[np.ndarray], float, float]:
     """Skeletonise ink to centreline polylines. Returns (paths_mm, w_mm, h_mm)."""
     from skimage.morphology import skeletonize
@@ -250,7 +250,7 @@ def _centerline_paths(
     # Drop isolated speckles before skeletonising — they become stray dots.
     count, labels, stats, _ = cv2.connectedComponentsWithStats(bw, 8)
     cleaned = np.zeros_like(bw)
-    min_area = max(int((min_spur_px) ** 2), 6)
+    min_area = 1 if preserve_dots else max(int((min_spur_px) ** 2), 6)
     for i in range(1, count):
         if stats[i, cv2.CC_STAT_AREA] >= min_area:
             cleaned[labels == i] = 255
@@ -264,13 +264,27 @@ def _centerline_paths(
             continue
         arr = np.asarray(line, dtype=np.float32)
         seg_len = float(np.linalg.norm(np.diff(arr, axis=0), axis=1).sum())
-        if seg_len < min_spur_px and len(line) < 6:
+        if not preserve_dots and seg_len < min_spur_px and len(line) < 6:
             continue  # tiny skeleton hair
         approx = cv2.approxPolyDP(arr.reshape(-1, 1, 2), eps_px, False).reshape(-1, 2)
         if len(approx) < 2:
             continue
         smoothed = chaikin(approx.astype(np.float64), smooth_iters)
         paths.append(smoothed * coord2mm)
+
+    if preserve_dots:
+        # A punctuation mark can skeletonize to one isolated pixel, with no
+        # graph edges at all. Emit a short pen stroke instead of losing it.
+        kernel = np.ones((3, 3), dtype=np.uint8)
+        kernel[1, 1] = 0
+        degree = cv2.filter2D(skeleton.astype(np.uint8), cv2.CV_16U, kernel)
+        ys, xs = np.where(skeleton & (degree == 0))
+        for x, y in zip(xs, ys, strict=True):
+            x0 = max(float(x) - .25, 0)
+            x1 = min(float(x) + .25, work.shape[1] - 1)
+            if x1 <= x0:
+                continue
+            paths.append(np.asarray([[x0, y], [x1, y]], dtype=float) * coord2mm)
 
     if not paths:
         raise PlotterError(
@@ -298,9 +312,10 @@ def centerline_image_to_drawing(
     *,
     dpi: float = IMAGE_DPI,
     detail: int = 1,
+    preserve_dots: bool = False,
 ) -> Drawing:
     """Like :func:`centerline_image_to_svg`, but also returns the Drawing."""
-    paths, w_mm, h_mm = _centerline_paths(image_path, dpi, detail)
+    paths, w_mm, h_mm = _centerline_paths(image_path, dpi, detail, preserve_dots=preserve_dots)
     _write_lines_svg(svg_path, [p.tolist() for p in paths], w_mm, h_mm)
     return _drawing_from_paths(paths, w_mm, h_mm, close=False)
 

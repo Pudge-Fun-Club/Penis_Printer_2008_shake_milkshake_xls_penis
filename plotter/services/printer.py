@@ -59,6 +59,15 @@ class PrinterController:
         self.tracker.jog(0, 0, 5.0, cal.bed_width, cal.bed_height)
         self.client.home(home_axes)
         self.tracker.home(home_axes)
+        query = getattr(self.client, "query_position", None)
+        if callable(query):
+            try:
+                position = query()
+                if isinstance(position, dict):
+                    self.tracker.set_axes(**{k: position[k] for k in ("x", "y", "z")})
+            except Exception:
+                self.tracker.invalidate()
+                raise
         return self.position()
 
     def jog(

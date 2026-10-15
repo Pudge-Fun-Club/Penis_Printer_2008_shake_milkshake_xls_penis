@@ -23,6 +23,7 @@ from .routes import (
     gallery,
     jobs,
     maze,
+    notes,
     osm_map,
     pages,
     paper,
@@ -69,6 +70,7 @@ def create_app() -> FastAPI:
         fonts,
         jobs,
         maze,
+        notes,
         osm_map,
         pages,
         paper,
@@ -86,7 +88,9 @@ def create_app() -> FastAPI:
     # the route handlers stay free of try/except boilerplate.
     @app.exception_handler(PrinterError)
     async def printer_error(_: Request, exc: PrinterError) -> JSONResponse:
-        return JSONResponse(status_code=502, content={"detail": str(exc)})
+        return JSONResponse(
+            status_code=getattr(exc, "status_code", 502), content={"detail": str(exc)}
+        )
 
     @app.exception_handler(ServiceError)
     async def service_error(_: Request, exc: ServiceError) -> JSONResponse:

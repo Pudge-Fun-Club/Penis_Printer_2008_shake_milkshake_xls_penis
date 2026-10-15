@@ -9,18 +9,21 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import threading
 import time
 from collections import deque
 from pathlib import Path
 
-from plotter.printer.base import PrinterError
+from plotter.printer.base import PrinterBusyError, PrinterError
 from plotter.printer.serial.transport import (
     ACK_TIMEOUT,
     BANNER_QUIET,
     BANNER_TIMEOUT,
     DEFAULT_BAUD,
     DEFAULT_PORT,
+    HEARTBEAT_INTERVAL,
+    HEARTBEAT_TIMEOUT,
     IDLE,
     LOADED,
     PAUSED,
@@ -61,6 +64,7 @@ class SerialWorker:
         self._transport: SerialTransport | None = None
         self._online = False
         self._last_error: str | None = None
+        self._last_activity = 0.0
 
         self._state = IDLE
         self._job_lines: list[str] = []
@@ -71,6 +75,7 @@ class SerialWorker:
         self._x = 0.0
         self._y = 0.0
         self._z = 0.0
+        self._reported_position: dict[str, float] | None = None
         self._park_requested = False
         self._resume_requested = False
         self._resume_xy: tuple[float, float] | None = None
@@ -106,6 +111,8 @@ class SerialWorker:
     def upload(self, gcode_path: Path, *, start: bool = False) -> dict:
         lines = prepare_lines(gcode_path.read_text())
         with self._lock:
+            if self._state in (PRINTING, PAUSED):
+                raise PrinterBusyError("Printer is already running a job.")
             self._job_lines = lines
             self._job_name = gcode_path.name
             self._job_index = 0
@@ -133,6 +140,16 @@ class SerialWorker:
         else:
             cmd = "G28"
         self._submit([cmd], wait=True)
+
+    def query_position(self) -> dict[str, float]:
+        """Read M114, including safe-Z homing's actual centre and lift."""
+        with self._lock:
+            self._reported_position = None
+        self._submit(["M400", "M114"], wait=True)
+        with self._lock:
+            if self._reported_position is None:
+                raise PrinterError("Принтер не сообщил координаты после M114.")
+            return dict(self._reported_position)
 
     def jog(
         self, x: float = 0.0, y: float = 0.0, z: float = 0.0, speed: int | None = None
@@ -194,6 +211,8 @@ class SerialWorker:
         self._wake.set()
 
     def _cancel(self) -> None:
+        from plotter.core.position import get_tracker
+        get_tracker().invalidate()
         with self._lock:
             self._state = IDLE
             self._job_lines = []
@@ -279,6 +298,18 @@ class SerialWorker:
                 self._stream_line(*job_line)
                 continue
 
+            if self._finish_job():
+                continue
+
+            if time.monotonic() - self._last_activity >= HEARTBEAT_INTERVAL:
+                try:
+                    # Read-only temperature query: detects dead USB without
+                    # homing, moving axes or changing heater targets.
+                    self._send_line("M105", timeout=HEARTBEAT_TIMEOUT)
+                except PrinterError as exc:
+                    self._mark_offline(exc)
+                continue
+
             self._wake.wait(0.1)
             self._wake.clear()
 
@@ -313,19 +344,47 @@ class SerialWorker:
             if self._state != PRINTING:
                 return None
             if self._job_index >= len(self._job_lines):
-                # Job complete.
+                return None
+            return (self._job_generation, self._job_index, self._job_lines[self._job_index])
+
+    def _finish_job(self) -> bool:
+        with self._lock:
+            if self._state != PRINTING or self._job_index < len(self._job_lines):
+                return False
+            generation = self._job_generation
+            self._reported_position = None
+        from plotter.core.position import get_tracker
+        tracker = get_tracker()
+        try:
+            # ACKs can precede actual motion. Keep status=Printing until Marlin
+            # has finished all buffered moves, then synchronize shared position.
+            self._send_line("M400")
+            self._send_line("M114")
+            with self._lock:
+                position = self._reported_position
+            if position is not None:
+                tracker.set_axes(**position)
+            else:
+                tracker.invalidate()
+        except PrinterError as exc:
+            tracker.invalidate()
+            with self._lock:
+                self._last_error = str(exc)
+        with self._lock:
+            if self._job_generation == generation and self._state == PRINTING:
                 self._state = IDLE
                 self._job_lines = []
                 self._job_name = None
                 self._job_index = 0
-                return None
-            return (self._job_generation, self._job_index, self._job_lines[self._job_index])
+        return True
 
     def _stream_line(self, generation: int, index: int, line: str) -> None:
         try:
             self._send_line(line)
         except PrinterError as exc:
             log.warning("serial print aborted: %s", exc)
+            from plotter.core.position import get_tracker
+            get_tracker().invalidate()
             with self._lock:
                 self._state = IDLE
                 self._last_error = str(exc)
@@ -370,6 +429,10 @@ class SerialWorker:
         try:
             self._transport = self._transport_factory(self._resolve_port(), self.baud)
             self._wait_for_banner()
+            # Reopening USB can reset Marlin; persisted homing is no proof of
+            # the current machine position. Invalidate before reporting online.
+            from plotter.core.position import get_tracker
+            get_tracker().invalidate()
             for line in ("G21", "G90"):
                 self._send_line(line)
         except Exception as exc:  # noqa: BLE001 - any open/IO failure means offline
@@ -402,7 +465,7 @@ class SerialWorker:
                 # Board was already up and is quiet — assume it's ready.
                 return
 
-    def _send_line(self, line: str) -> None:
+    def _send_line(self, line: str, *, timeout: float | None = None) -> None:
         if self._transport is None:
             raise PrinterError("serial port not open")
         payload = (line.strip() + "\n").encode()
@@ -412,7 +475,8 @@ class SerialWorker:
             self._mark_offline(exc)
             raise PrinterError(f"serial write failed: {exc}") from exc
 
-        deadline = time.monotonic() + ACK_TIMEOUT
+        ack_timeout = ACK_TIMEOUT if timeout is None else timeout
+        deadline = time.monotonic() + ack_timeout
         while True:
             try:
                 raw = self._transport.readline()
@@ -422,11 +486,26 @@ class SerialWorker:
             resp = raw.decode(errors="replace").strip() if raw else ""
             if resp:
                 low = resp.lower()
+                if line.strip().upper() == "M114":
+                    match = re.search(
+                        r"X:([-+\d.]+)\s+Y:([-+\d.]+)\s+Z:([-+\d.]+)", resp
+                    )
+                    if match:
+                        position = dict(zip(("x", "y", "z"),
+                                            map(float, match.groups()), strict=True))
+                        with self._lock:
+                            self._reported_position = position
+                            self._x, self._y, self._z = (position[a] for a in ("x", "y", "z"))
                 if low.startswith("ok"):
                     self._track_position(line)
+                    self._last_activity = time.monotonic()
                     return
+                if low == "start":
+                    error = PrinterError("printer firmware restarted")
+                    self._mark_offline(error)
+                    raise error
                 if "busy" in low:
-                    deadline = time.monotonic() + ACK_TIMEOUT
+                    deadline = time.monotonic() + ack_timeout
                 elif low.startswith("error"):
                     raise PrinterError(f"printer error: {resp}")
                 elif low.startswith(("resend", "rs ")):
@@ -435,13 +514,31 @@ class SerialWorker:
                     raise PrinterError(f"unsupported resend request: {resp}")
                 # echo:, //, temperature reports, banner lines: ignore.
             if time.monotonic() > deadline:
-                raise PrinterError(f"timeout waiting for 'ok' after: {line}")
+                error = PrinterError(f"timeout waiting for 'ok' after: {line}")
+                self._mark_offline(error)
+                raise error
 
     def _mark_offline(self, exc: Exception) -> None:
+        from plotter.core.position import get_tracker
+
+        get_tracker().invalidate()
         with self._lock:
             self._online = False
             self._last_error = str(exc)
+            # Reconnect restores the link, never an interrupted trajectory.
+            # Old park/resume commands must not reach a restarted board.
+            if self._state in (PRINTING, PAUSED):
+                self._state = IDLE
+                self._job_lines = []
+                self._job_name = None
+                self._job_index = 0
+                self._job_generation += 1
+            self._park_requested = False
+            self._resume_requested = False
+            self._resume_xy = None
+            self._reported_position = None
         self._close_port()
+        self._fail_queue(str(exc))
 
     def _track_position(self, line: str) -> None:
         stripped = line.split(";", 1)[0].strip()

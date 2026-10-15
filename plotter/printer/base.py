@@ -13,6 +13,10 @@ class PrinterError(RuntimeError):
     """
 
 
+class PrinterBusyError(PrinterError):
+    status_code = 409
+
+
 @runtime_checkable
 class PrinterBackend(Protocol):
     """Common surface shared by every printer backend.

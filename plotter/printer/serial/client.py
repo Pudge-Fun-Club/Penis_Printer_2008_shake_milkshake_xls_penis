@@ -54,6 +54,9 @@ class SerialClient:
     def home(self, axes: list[str] | None = None) -> None:
         self._worker().home(axes)
 
+    def query_position(self) -> dict[str, float]:
+        return self._worker().query_position()
+
     def jog(
         self, x: float = 0.0, y: float = 0.0, z: float = 0.0, speed: int | None = None
     ) -> None:
